@@ -107,8 +107,8 @@ class RGBtoSPEC4Fitting(Fitting):
     def get_train_inputs(self, batch_size) -> tuple[Tensor, Optional[Tensor]]:
         srgb = torch.rand((batch_size, 3))
         rgb = conversions.batched_sRGB_to_RGB(srgb)
-        return rgb
-    def convert_from_xyz(self, xyz: Tensor) -> Tensor:
+        return rgb, None
+    def convert_from_xyz(self, xyz: Tensor, extra: Optional[Tensor]) -> Tensor:
         return conversions.batched_XYZ_to_RGB(xyz)
 
 class XYZStoSPEC4Fitting(Fitting):
@@ -128,8 +128,8 @@ class XYZStoSPEC4Fitting(Fitting):
         return xyz
 
 if __name__ == '__main__':
-    # fitting = RGBtoSPEC4Fitting()
-    fitting = XYZStoSPEC4Fitting()
+    fitting = RGBtoSPEC4Fitting()
+    # fitting = XYZStoSPEC4Fitting()
     print(f"Fitting {fitting.name}...")
     fitting.fit()
     print(f"{fitting.name} weights:")
