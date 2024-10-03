@@ -69,36 +69,33 @@ class Fitting:
         positive_constraint_error = torch.relu(-spec4)
         squared_error = positive_constraint_error**2
         return squared_error.mean()
-    def fit(self, num_steps: int = 5_000, batch_size: int = 1024, learning_rate: float = 0.0001):
+    def fit(self, num_steps: int = 40_000, batch_size: int = 1024, learning_rate: float = 0.0001, wavelengths_learning_rate: float = 0.01):
         self.model.train()
-        fit_parameters = list(self.model.parameters())
+        optimizer = torch.optim.Adam(self.model.parameters(), lr=learning_rate)
         if self.fit_wavelengths:
             self.wavelengths_model.train()
-            fit_parameters += list(self.wavelengths_model.parameters())
+            optimizer.add_param_group({'params': self.wavelengths_model.parameters(), 'lr': wavelengths_learning_rate})
         else:
             self.wavelengths_model.eval()
-        optimizer = torch.optim.Adam(fit_parameters, lr=learning_rate)
         progress = tqdm(range(num_steps))
         progress.set_description(f'Fitting {self.name}')
         filtered_loss = 0
         for step in progress:
             inputs = self.get_train_inputs(batch_size)
             unclipped_spec4s = self.model(inputs)
-            closs = self.get_constraint_loss(unclipped_spec4s)
+            # closs = self.get_constraint_loss(unclipped_spec4s)
             clipped_spec4s = nn.functional.relu(unclipped_spec4s)
             padded_spec4s = torch.nn.functional.pad(clipped_spec4s, (1, 1), value=0.0)
             xyzs = conversions.batched_spectrum_to_XYZ(padded_spec4s, self.wavelengths_model.get_wavelengths())
             outputs = self.convert_from_xyz(xyzs)
             rloss = self.get_reconstruction_loss(inputs, outputs)
-            loss = rloss + 0.0*closs
+            loss = rloss #+ 0.0*closs
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
-            closs_val = closs.item()
-            rloss_val = rloss.item()
             loss_val = loss.item()
             filtered_loss = loss_val if step == 0 else 0.9 * filtered_loss + 0.1 * loss_val
-            progress.set_postfix(loss=filtered_loss, rloss=rloss_val, closs=closs_val)
+            progress.set_postfix(loss=filtered_loss)
         print(f'Final loss: {filtered_loss:.16f}')
 
 class RGBtoSPEC4Fitting(Fitting):

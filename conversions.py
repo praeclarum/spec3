@@ -73,10 +73,12 @@ def tone_map_XYZ(xyz: Tensor) -> Tensor:
     """
     return xyz / (1 + xyz)
 
-RGB_to_SPEC4_matrix = torch.tensor([[ 5.2422e-02,  3.4280e-03,  2.4217e-01],
-        [ 2.2930e-04, -2.8189e-02,  1.1234e-04],
-        [-2.4842e-04,  1.3315e-02,  6.7432e-03],
-        [ 6.7984e-03,  2.7887e-03, -3.1778e-03]]).T
+spec4_wavelengths = torch.tensor([368.4131, 422.3444, 495.5717, 626.7368, 502.0134, 604.8749])
+
+RGB_to_SPEC4_matrix = torch.tensor([[-2.4200e-01, -9.6354e-02, -3.4952e-02],
+        [ 6.1749e-03,  1.4368e-02,  1.3582e-02],
+        [ 1.7068e-01,  4.1125e-02,  5.0478e-02],
+        [-7.5107e-06, -1.1342e-01, -1.8776e-01]]).T
 
 # ERROR: linalg.inv: A must be batches of square matrices, but they are 4 by 3 matrices
 # SPEC4_to_RGB_matrix = torch.inverse(RGB_to_SPEC4_matrix)
@@ -145,16 +147,6 @@ def batched_spectrum_to_XYZ(spectral_radiance: Tensor, wavelengths: Tensor) -> T
     mean_matched_radiance = (matched_radiance[:, :-1, :] + matched_radiance[:, 1:, :]) / 2
     xyz = torch.sum(mean_matched_radiance * dwavelength.unsqueeze(0).unsqueeze(-1), dim=1)
     return xyz
-
-spec4_wavelengths = torch.tensor([
-    340.0,
-    400.0,
-    460.0,
-    520.0,
-    580.0,
-    640.0,
-    # 700.0,
-])
 
 def batched_SPEC4_to_XYZ(spec4: Tensor) -> Tensor:
     """Converts SPEC4 to CIE XYZ.
