@@ -3,6 +3,13 @@
 import torch
 from torch import Tensor
 
+RGB_to_SPEC4_matrix = torch.tensor([
+    [-3.5201e-05, -1.7171e-04,  1.2690e-02],
+    [ 3.6295e-02,  1.7544e-02, -6.3641e-02],
+    [-4.1377e-02, -2.6914e-03,  8.8656e-02],
+    [ 9.3362e-02,  1.0659e-02, -1.7690e-01]
+])
+
 #
 # Primary color space conversion functions
 #
@@ -28,7 +35,7 @@ def batched_sRGB_to_RGB(srgb: Tensor) -> Tensor:
     return torch.where(srgb <= 0.04045, srgb / 12.92, ((srgb + 0.055) / 1.055) ** 2.4)
 
 def batched_RGB_to_sRGB(rgb: Tensor) -> Tensor:
-    """Converts linear RGB to sRGB using a gamma of 2.4.
+    """Converts linear RGB to sRGB using a gamma of 2.4 and clips the result to [0, 1].
 
     Args:
         rgb: A tensor of linear RGB values shaped as (batch_size, 3).
@@ -36,7 +43,9 @@ def batched_RGB_to_sRGB(rgb: Tensor) -> Tensor:
     Returns:
         A tensor of sRGB values in the range [0, 1] shaped as (batch_size, 3).
     """
-    return torch.where(rgb <= 0.0031308, rgb * 12.92, 1.055 * (rgb ** (1 / 2.4)) - 0.055)
+    unclipped_sRGB = torch.where(rgb <= 0.0031308, rgb * 12.92, 1.055 * (rgb ** (1 / 2.4)) - 0.055)
+    srgb = torch.clamp(unclipped_sRGB, 0.0, 1.0)
+    return srgb
 
 def batched_RGB_to_XYZ(rgb: Tensor) -> Tensor:
     """Converts linear RGB to CIE XYZ.
@@ -59,6 +68,17 @@ def batched_XYZ_to_RGB(xyz: Tensor) -> Tensor:
         A tensor of linear RGB values shaped as (batch_size, 3).
     """
     return torch.matmul(xyz, XYZ_to_RGB_matrix)
+
+def tone_map_XYZ(xyz: Tensor) -> Tensor:
+    """Tone maps CIE XYZ values using Reinhard's method.
+
+    Args:
+        xyz: A tensor of CIE XYZ values shaped as (batch_size, 3).
+
+    Returns:
+        A tensor of tone-mapped CIE XYZ values shaped as (batch_size, 3).
+    """
+    return xyz / (1 + xyz)
 
 def piecewise_gaussian(x: Tensor, mu: float, tau1: float, tau2: float):
     """A piecewise Gaussian function with different slopes on the left and right.
@@ -107,37 +127,27 @@ def batched_spectrum_to_XYZ(spectral_radiance: Tensor, wavelengths: Tensor) -> T
     Returns:
         A tensor of CIE XYZ values shaped as (batch_size, 3).
     """
-    print(f"spectral_radiance.shape: {spectral_radiance.shape}")
     color_matching = xyz_color_matching(wavelengths)
-    print(f"color_matching.shape: {color_matching.shape}")
     dwavelength = wavelengths[1:] - wavelengths[:-1]
-    print(f"dwavelength.shape: {dwavelength.shape}")
     matched_radiance = spectral_radiance.unsqueeze(-1) * color_matching
-    print(f"matched_radiance.shape: {matched_radiance.shape}")
     mean_matched_radiance = (matched_radiance[:, :-1, :] + matched_radiance[:, 1:, :]) / 2
-    print(f"mean_matched_radiance.shape: {mean_matched_radiance.shape}")
     xyz = torch.sum(mean_matched_radiance * dwavelength.unsqueeze(0).unsqueeze(-1), dim=1)
-    print(f"xyz.shape: {xyz.shape}")
     return xyz
 
-def test_batched_spectrum_to_XYZ():
-    wavelengths = torch.tensor([
-        550.0, 650.0,
-    ])
-    print(f"wavelengths: {wavelengths}")
-    spectral_radiance = torch.tensor([
-        [1.0, 0.0],
-        [0.0, 1.0],
-        [0.5, 0.5],
-    ])
-    print(f"spectral_radiance: {spectral_radiance}")
-    xyz = batched_spectrum_to_XYZ(spectral_radiance, wavelengths)
-    print(f"xyz.shape: {xyz.shape}")
-    print(f"xyz: {xyz}")
-    srgb = batched_XYZ_to_sRGB(xyz)
-    print(f"srgb: {srgb}")
+spec4_wavelengths = torch.tensor([400.0, 460.0, 520.0, 580.0, 640.0, 700.0])
 
-test_batched_spectrum_to_XYZ()
+def batched_SPEC4_to_XYZ(spec4: Tensor) -> Tensor:
+    """Converts SPEC4 to CIE XYZ.
+
+    Args:
+        spec4: A tensor of SPEC4 values shaped as (batch_size, 4).
+
+    Returns:
+        A tensor of CIE XYZ values shaped as (batch_size, 3).
+    """
+    spectrum = torch.nn.functional.pad(spec4, (1, 1), value=0.0)
+    xyz = batched_spectrum_to_XYZ(spectrum, spec4_wavelengths)
+    return xyz
 
 #
 # Composite (mult-step) conversions
@@ -156,7 +166,8 @@ def batched_sRGB_to_XYZ(srgb):
     return batched_RGB_to_XYZ(batched_sRGB_to_RGB(srgb))
 
 def batched_XYZ_to_sRGB(xyz):
-    """Converts CIE XYZ to sRGB.
+    """Converts CIE XYZ to sRGB in the range [0, 1].
+    If XYZ is HDR, you should apply tone mapping using `tone_map_XYZ` before converting to sRGB.
 
     Args:
         xyz: A tensor of CIE XYZ values shaped as (batch_size, 3).
@@ -195,10 +206,30 @@ def test_sRGB_XYZ():
     input_data = torch.rand(100, 3)
     test_round_trip("sRGB to XYZ", input_data, batched_sRGB_to_XYZ, batched_XYZ_to_sRGB)
 
-def test_all_conversions():
+def test_batched_spectrum_to_XYZ():
+    wavelengths = torch.tensor([
+        550.0, 650.0,
+    ])
+    print(f"wavelengths: {wavelengths}")
+    spectral_radiance = torch.tensor([
+        [1.0, 0.0],
+        [0.0, 1.0],
+        [0.5, 0.5],
+    ])
+    print(f"spectral_radiance: {spectral_radiance}")
+    xyz = batched_spectrum_to_XYZ(spectral_radiance, wavelengths)
+    print(f"xyz.shape: {xyz.shape}")
+    print(f"xyz: {xyz}")
+    mapped_xyz = tone_map_XYZ(xyz)
+    print(f"mapped_xyz: {mapped_xyz}")
+    srgb = batched_XYZ_to_sRGB(mapped_xyz)
+    print(f"srgb: {srgb}")
+
+def test_all():
     test_sRGB_RGB()
     test_RGB_XYZ()
     test_sRGB_XYZ()
+    test_batched_spectrum_to_XYZ()
 
 if __name__ == "__main__":
-    test_all_conversions()
+    test_all()

@@ -1,0 +1,76 @@
+"""This is the code used to determine the linear fits to convert to and from SPEC4"""
+import torch
+from torch import Tensor, nn
+from tqdm.autonotebook import tqdm
+
+import conversions
+
+class Model(nn.Module):
+    """Base class for all models."""
+    def forward(self, x: Tensor) -> Tensor:
+        raise NotImplementedError
+    def print_weights(self):
+        for name, param in self.named_parameters():
+            print(f'{name}: {param}')
+    
+class LinearModel(Model):
+    """A linear model."""
+    def __init__(self, in_channels: int, out_channels: int):
+        super().__init__()
+        self.linear = nn.Linear(in_channels, out_channels, bias=False)
+
+    def forward(self, x: Tensor) -> Tensor:
+        y = self.linear(x)
+        return y
+
+class Fitting:
+    """Base class for all fittings."""
+    def __init__(self, name: str, in_channels: int, model_type: str):
+        self.name = name
+        self.in_channels = in_channels
+        model_out_channels = 4
+        if model_type == 'linear':
+            self.model = LinearModel(in_channels, model_out_channels)
+        else:
+            raise ValueError(f'Unknown model type: {model_type}')
+    def get_train_inputs(self, batch_size) -> Tensor:
+        raise NotImplementedError
+    def convert_from_xyz(self, xyz: Tensor) -> Tensor:
+        raise NotImplementedError
+    def get_roundtrip_loss(self, inputs: Tensor, outputs: Tensor) -> Tensor:
+        return nn.functional.mse_loss(inputs, outputs)
+    def fit(self, num_steps: int = 20_000, batch_size: int = 1024, learning_rate: float = 0.0001):
+        self.model.train()
+        optimizer = torch.optim.Adam(self.model.parameters(), lr=learning_rate)
+        progress = tqdm(range(num_steps))
+        progress.set_description(f'Fitting {self.name}')
+        filtered_loss = 0
+        for step in progress:
+            inputs = self.get_train_inputs(batch_size)
+            spec4s = self.model(inputs)
+            xyzs = conversions.batched_SPEC4_to_XYZ(spec4s)
+            outputs = self.convert_from_xyz(xyzs)
+            loss = self.get_roundtrip_loss(inputs, outputs)
+            optimizer.zero_grad()
+            loss.backward()
+            optimizer.step()
+            loss_val = loss.item()
+            filtered_loss = loss_val if step == 0 else 0.9 * filtered_loss + 0.1 * loss_val
+            progress.set_postfix(loss=filtered_loss)
+        print(f'Final loss: {filtered_loss:.16f}')
+
+class RGBtoSPEC4Fitting(Fitting):
+    def __init__(self):
+        super().__init__('RGB to SPEC4', 3, 'linear')
+    def get_train_inputs(self, batch_size) -> Tensor:
+        srgb = torch.rand((batch_size, 3))
+        rgb = conversions.batched_sRGB_to_RGB(srgb)
+        return rgb
+    def convert_from_xyz(self, xyz: Tensor) -> Tensor:
+        return conversions.batched_XYZ_to_RGB(xyz)
+
+if __name__ == '__main__':
+    print("Fitting RGB to SPEC4...")
+    rgb_to_spec4_fitting = RGBtoSPEC4Fitting()
+    rgb_to_spec4_fitting.fit()
+    rgb_to_spec4_fitting.model.print_weights()
