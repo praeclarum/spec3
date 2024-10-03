@@ -73,10 +73,10 @@ def tone_map_XYZ(xyz: Tensor) -> Tensor:
     """
     return xyz / (1 + xyz)
 
-RGB_to_SPEC4_matrix = torch.tensor([[ 1.8737e-03,  7.3024e-05,  8.9951e-03],
-        [-3.6033e-04,  1.3334e-02,  5.9196e-03],
-        [ 6.9121e-03,  2.8212e-03, -2.7885e-03],
-        [-5.5133e-07, -5.5273e-07, -2.0805e-06]]).T
+RGB_to_SPEC4_matrix = torch.tensor([[ 5.2422e-02,  3.4280e-03,  2.4217e-01],
+        [ 2.2930e-04, -2.8189e-02,  1.1234e-04],
+        [-2.4842e-04,  1.3315e-02,  6.7432e-03],
+        [ 6.7984e-03,  2.7887e-03, -3.1778e-03]]).T
 
 # ERROR: linalg.inv: A must be batches of square matrices, but they are 4 by 3 matrices
 # SPEC4_to_RGB_matrix = torch.inverse(RGB_to_SPEC4_matrix)
@@ -146,7 +146,15 @@ def batched_spectrum_to_XYZ(spectral_radiance: Tensor, wavelengths: Tensor) -> T
     xyz = torch.sum(mean_matched_radiance * dwavelength.unsqueeze(0).unsqueeze(-1), dim=1)
     return xyz
 
-spec4_wavelengths = torch.tensor([400.0, 460.0, 520.0, 580.0, 640.0, 700.0])
+spec4_wavelengths = torch.tensor([
+    340.0,
+    400.0,
+    460.0,
+    520.0,
+    580.0,
+    640.0,
+    # 700.0,
+])
 
 def batched_SPEC4_to_XYZ(spec4: Tensor) -> Tensor:
     """Converts SPEC4 to CIE XYZ.
@@ -238,7 +246,8 @@ def test_round_trip(title, input_data, conversion_fn, inverse_fn):
     n = input_data.shape[0]
     errors = torch.sum((inv_input_data - input_data)**2, dim=1)
     mse_error = torch.mean(errors)
-    for i in range(min(n, 32)):
+    max_print = 32 if title.endswith("SPEC4") else 3
+    for i in range(min(n, max_print)):
         error = errors[i]
         print(f"  error={error:.4f} from {input_data[i]} to {output_data[i]} back to {inv_input_data[i]}")
     print(f"{title} mean squared error: {mse_error:.12f}")
