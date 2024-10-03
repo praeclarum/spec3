@@ -3,13 +3,6 @@
 import torch
 from torch import Tensor
 
-RGB_to_SPEC4_matrix = torch.tensor([
-    [-3.5201e-05, -1.7171e-04,  1.2690e-02],
-    [ 3.6295e-02,  1.7544e-02, -6.3641e-02],
-    [-4.1377e-02, -2.6914e-03,  8.8656e-02],
-    [ 9.3362e-02,  1.0659e-02, -1.7690e-01]
-])
-
 #
 # Primary color space conversion functions
 #
@@ -79,6 +72,27 @@ def tone_map_XYZ(xyz: Tensor) -> Tensor:
         A tensor of tone-mapped CIE XYZ values shaped as (batch_size, 3).
     """
     return xyz / (1 + xyz)
+
+RGB_to_SPEC4_matrix = torch.tensor([
+    [-3.5201e-05, -1.7171e-04,  1.2690e-02],
+    [ 3.6295e-02,  1.7544e-02, -6.3641e-02],
+    [-4.1377e-02, -2.6914e-03,  8.8656e-02],
+    [ 9.3362e-02,  1.0659e-02, -1.7690e-01]
+]).T
+
+# ERROR: linalg.inv: A must be batches of square matrices, but they are 4 by 3 matrices
+# SPEC4_to_RGB_matrix = torch.inverse(RGB_to_SPEC4_matrix)
+
+def batched_RGB_to_SPEC4(rgb: Tensor) -> Tensor:
+    """Converts linear RGB to SPEC4.
+
+    Args:
+        rgb: A tensor of linear RGB values shaped as (batch_size, 3).
+
+    Returns:
+        A tensor of SPEC4 values shaped as (batch_size, 4).
+    """
+    return torch.matmul(rgb, RGB_to_SPEC4_matrix)
 
 def piecewise_gaussian(x: Tensor, mu: float, tau1: float, tau2: float):
     """A piecewise Gaussian function with different slopes on the left and right.
@@ -177,6 +191,43 @@ def batched_XYZ_to_sRGB(xyz):
     """
     return batched_RGB_to_sRGB(batched_XYZ_to_RGB(xyz))
 
+def batched_sRGB_to_SPEC4(srgb):
+    """Converts sRGB to SPEC4.
+
+    Args:
+        srgb: A tensor of sRGB values in the range [0, 1]
+              shaped as (batch_size, 3).
+
+    Returns:
+        A tensor of SPEC4 values shaped as (batch_size, 4).
+    """
+    return batched_RGB_to_SPEC4(batched_sRGB_to_RGB(srgb))
+
+def batched_SPEC4_to_RGB(spec4: Tensor) -> Tensor:
+    """Converts SPEC4 to linear RGB.
+
+    Args:
+        spec4: A tensor of SPEC4 values shaped as (batch_size, 4).
+
+    Returns:
+        A tensor of linear RGB values shaped as (batch_size, 3).
+    """
+    # Would like to do this, but the matrix is not square
+    # return torch.matmul(spec4, SPEC4_to_RGB_matrix)
+    xyz = batched_SPEC4_to_XYZ(spec4)
+    return batched_XYZ_to_RGB(xyz)
+
+def batched_SPEC4_to_sRGB(spec4):
+    """Converts SPEC4 to sRGB in the range [0, 1].
+
+    Args:
+        spec4: A tensor of SPEC4 values shaped as (batch_size, 4).
+
+    Returns:
+        A tensor of sRGB values in the range [0, 1] shaped as (batch_size, 3).
+    """
+    return batched_RGB_to_sRGB(batched_SPEC4_to_RGB(spec4))
+
 #
 # Testing
 #
@@ -192,7 +243,7 @@ def test_round_trip(title, input_data, conversion_fn, inverse_fn):
     for i in range(min(n, 3)):
         error = errors[i]
         print(f"  error={error:.4f} from {input_data[i]} to {output_data[i]} back to {inv_input_data[i]}")
-    print(f"{title} mean squared error: {mse_error:.4f}")
+    print(f"{title} mean squared error: {mse_error:.12f}")
 
 def test_sRGB_RGB():
     input_data = torch.rand(100, 3)
@@ -205,6 +256,10 @@ def test_RGB_XYZ():
 def test_sRGB_XYZ():
     input_data = torch.rand(100, 3)
     test_round_trip("sRGB to XYZ", input_data, batched_sRGB_to_XYZ, batched_XYZ_to_sRGB)
+
+def test_sRGB_SPEC4():
+    input_data = torch.rand(100, 3)
+    test_round_trip("sRGB to SPEC4", input_data, batched_sRGB_to_SPEC4, batched_SPEC4_to_sRGB)
 
 def test_batched_spectrum_to_XYZ():
     wavelengths = torch.tensor([
@@ -226,6 +281,7 @@ def test_batched_spectrum_to_XYZ():
     print(f"srgb: {srgb}")
 
 def test_all():
+    test_sRGB_SPEC4()
     test_sRGB_RGB()
     test_RGB_XYZ()
     test_sRGB_XYZ()
