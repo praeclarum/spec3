@@ -5,6 +5,26 @@ from tqdm.autonotebook import tqdm
 
 import conversions
 
+class WavelengthsModel(nn.Module):
+    """A model that predicts the wavelengths of the SPEC4 channels."""
+    def __init__(self):
+        super().__init__()
+        self.num_wavelengths = 6
+    def get_wavelengths(self) -> Tensor:
+        """Returns the wavelengths of the SPEC4 channels."""
+        raise NotImplementedError
+    def print_weights(self):
+        for name, param in self.named_parameters():
+            print(f'{name}: {param}')
+    
+class StandardWavelengthsModel(WavelengthsModel):
+    """A model that predicts the standard wavelengths of the SPEC4 channels."""
+    def __init__(self):
+        super().__init__()
+        self.wavelengths = nn.Parameter(conversions.spec4_wavelengths.clone())
+    def get_wavelengths(self) -> Tensor:
+        return self.wavelengths
+
 class Model(nn.Module):
     """Base class for all models."""
     def forward(self, x: Tensor) -> Tensor:
@@ -18,14 +38,13 @@ class LinearModel(Model):
     def __init__(self, in_channels: int, out_channels: int):
         super().__init__()
         self.linear = nn.Linear(in_channels, out_channels, bias=False)
-
     def forward(self, x: Tensor) -> Tensor:
         y = self.linear(x)
         return y
 
 class Fitting:
     """Base class for all fittings."""
-    def __init__(self, name: str, in_channels: int, model_type: str):
+    def __init__(self, name: str, in_channels: int, model_type: str, wavelengths_model_type: str, fit_wavelengths: bool):
         self.name = name
         self.in_channels = in_channels
         model_out_channels = 4
@@ -33,6 +52,11 @@ class Fitting:
             self.model = LinearModel(in_channels, model_out_channels)
         else:
             raise ValueError(f'Unknown model type: {model_type}')
+        if wavelengths_model_type == 'standard':
+            self.wavelengths_model = StandardWavelengthsModel()
+        else:
+            raise ValueError(f'Unknown wavelengths model type: {wavelengths_model_type}')
+        self.fit_wavelengths = fit_wavelengths
     def get_train_inputs(self, batch_size) -> Tensor:
         raise NotImplementedError
     def convert_from_xyz(self, xyz: Tensor) -> Tensor:
@@ -45,9 +69,15 @@ class Fitting:
         positive_constraint_error = torch.relu(-spec4)
         squared_error = positive_constraint_error**2
         return squared_error.mean()
-    def fit(self, num_steps: int = 20_000, batch_size: int = 1024, learning_rate: float = 0.0001):
+    def fit(self, num_steps: int = 5_000, batch_size: int = 1024, learning_rate: float = 0.0001):
         self.model.train()
-        optimizer = torch.optim.Adam(self.model.parameters(), lr=learning_rate)
+        fit_parameters = list(self.model.parameters())
+        if self.fit_wavelengths:
+            self.wavelengths_model.train()
+            fit_parameters += list(self.wavelengths_model.parameters())
+        else:
+            self.wavelengths_model.eval()
+        optimizer = torch.optim.Adam(fit_parameters, lr=learning_rate)
         progress = tqdm(range(num_steps))
         progress.set_description(f'Fitting {self.name}')
         filtered_loss = 0
@@ -56,10 +86,11 @@ class Fitting:
             unclipped_spec4s = self.model(inputs)
             closs = self.get_constraint_loss(unclipped_spec4s)
             clipped_spec4s = nn.functional.relu(unclipped_spec4s)
-            xyzs = conversions.batched_SPEC4_to_XYZ(clipped_spec4s)
+            padded_spec4s = torch.nn.functional.pad(clipped_spec4s, (1, 1), value=0.0)
+            xyzs = conversions.batched_spectrum_to_XYZ(padded_spec4s, self.wavelengths_model.get_wavelengths())
             outputs = self.convert_from_xyz(xyzs)
             rloss = self.get_reconstruction_loss(inputs, outputs)
-            loss = rloss + 10.0*closs
+            loss = rloss + 0.0*closs
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
@@ -72,7 +103,7 @@ class Fitting:
 
 class RGBtoSPEC4Fitting(Fitting):
     def __init__(self):
-        super().__init__('RGB to SPEC4', 3, 'linear')
+        super().__init__('RGB to SPEC4', 3, model_type='linear', wavelengths_model_type='standard', fit_wavelengths=True)
     def get_train_inputs(self, batch_size) -> Tensor:
         srgb = torch.rand((batch_size, 3))
         rgb = conversions.batched_sRGB_to_RGB(srgb)
@@ -84,4 +115,7 @@ if __name__ == '__main__':
     print("Fitting RGB to SPEC4...")
     rgb_to_spec4_fitting = RGBtoSPEC4Fitting()
     rgb_to_spec4_fitting.fit()
+    print(f"{rgb_to_spec4_fitting.name} weights:")
     rgb_to_spec4_fitting.model.print_weights()
+    print(f"{rgb_to_spec4_fitting.name} wavelengths:")
+    print(repr(rgb_to_spec4_fitting.wavelengths_model.get_wavelengths()))
