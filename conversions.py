@@ -105,10 +105,10 @@ def batched_xyY_to_XYZ(xyY: Tensor) -> Tensor:
 
 spec4_wavelengths = torch.tensor([400.0, 460.0, 520.0, 580.0, 640.0, 700.0])
 
-RGB_to_SPEC4_matrix = torch.tensor([[ 1.6554e-03,  5.3591e-06,  9.2193e-03],
-        [ 2.8717e-03,  1.4074e-02,  4.9543e-03],
-        [ 2.7760e-03,  1.8814e-03, -1.9328e-03],
-        [ 8.0172e-03,  1.8065e-03, -1.7721e-03]]).T
+RGB_to_SPEC4_matrix = torch.tensor([[ 1.7695e-03,  2.9910e-05,  9.2270e-03],
+        [ 8.2094e-04,  1.3803e-02,  5.1758e-03],
+        [ 5.4744e-03,  2.2374e-03, -2.2369e-03],
+        [ 2.8392e-03,  1.1650e-03, -1.1494e-03]]).T
 
 # ERROR: linalg.inv: A must be batches of square matrices, but they are 4 by 3 matrices
 # SPEC4_to_RGB_matrix = torch.inverse(RGB_to_SPEC4_matrix)

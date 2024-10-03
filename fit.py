@@ -69,7 +69,7 @@ class Fitting:
         positive_constraint_error = torch.relu(-spec4)
         squared_error = positive_constraint_error**2
         return squared_error.mean()
-    def fit(self, num_steps: int = 20_000, batch_size: int = 1024, learning_rate: float = 0.0001, wavelengths_learning_rate: float = 0.01):
+    def fit(self, num_steps: int = 30_000, batch_size: int = 1024, learning_rate: float = 0.0001, wavelengths_learning_rate: float = 0.01):
         self.model.train()
         optimizer = torch.optim.Adam(self.model.parameters(), lr=learning_rate)
         if self.fit_wavelengths:
@@ -84,7 +84,6 @@ class Fitting:
             inputs = self.get_train_inputs(batch_size)
             unclipped_spec4s = self.model(inputs)
             closs = self.get_constraint_loss(unclipped_spec4s)
-            # clipped_spec4s = nn.functional.relu(unclipped_spec4s)
             padded_spec4s = torch.nn.functional.pad(unclipped_spec4s, (1, 1), value=0.0)
             xyzs = conversions.batched_spectrum_to_XYZ(padded_spec4s, self.wavelengths_model.get_wavelengths())
             outputs = self.convert_from_xyz(xyzs)
