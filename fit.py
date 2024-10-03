@@ -37,8 +37,14 @@ class Fitting:
         raise NotImplementedError
     def convert_from_xyz(self, xyz: Tensor) -> Tensor:
         raise NotImplementedError
-    def get_roundtrip_loss(self, inputs: Tensor, outputs: Tensor) -> Tensor:
+    def get_reconstruction_loss(self, inputs: Tensor, outputs: Tensor) -> Tensor:
+        """Penalizes not being able to reconstruct the input."""
         return nn.functional.mse_loss(inputs, outputs)
+    def get_constraint_loss(self, spec4: Tensor) -> Tensor:
+        """Penalizes not satisfying constraints: e.g., non-negativity."""
+        positive_constraint_error = torch.relu(-spec4)
+        squared_error = positive_constraint_error**2
+        return squared_error.mean()
     def fit(self, num_steps: int = 20_000, batch_size: int = 1024, learning_rate: float = 0.0001):
         self.model.train()
         optimizer = torch.optim.Adam(self.model.parameters(), lr=learning_rate)
@@ -50,13 +56,17 @@ class Fitting:
             spec4s = self.model(inputs)
             xyzs = conversions.batched_SPEC4_to_XYZ(spec4s)
             outputs = self.convert_from_xyz(xyzs)
-            loss = self.get_roundtrip_loss(inputs, outputs)
+            rloss = self.get_reconstruction_loss(inputs, outputs)
+            closs = self.get_constraint_loss(spec4s)
+            loss = rloss + 100.0*closs
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
+            closs_val = closs.item()
+            rloss_val = rloss.item()
             loss_val = loss.item()
             filtered_loss = loss_val if step == 0 else 0.9 * filtered_loss + 0.1 * loss_val
-            progress.set_postfix(loss=filtered_loss)
+            progress.set_postfix(loss=filtered_loss, rloss=rloss_val, closs=closs_val)
         print(f'Final loss: {filtered_loss:.16f}')
 
 class RGBtoSPEC4Fitting(Fitting):

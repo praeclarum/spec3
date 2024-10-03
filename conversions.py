@@ -73,12 +73,10 @@ def tone_map_XYZ(xyz: Tensor) -> Tensor:
     """
     return xyz / (1 + xyz)
 
-RGB_to_SPEC4_matrix = torch.tensor([
-    [-3.5201e-05, -1.7171e-04,  1.2690e-02],
-    [ 3.6295e-02,  1.7544e-02, -6.3641e-02],
-    [-4.1377e-02, -2.6914e-03,  8.8656e-02],
-    [ 9.3362e-02,  1.0659e-02, -1.7690e-01]
-]).T
+RGB_to_SPEC4_matrix = torch.tensor([[ 1.8125e-03, -4.1853e-04,  9.3008e-03],
+        [-2.9494e-04,  2.2335e-02,  3.4295e-03],
+        [ 6.9521e-03, -8.9801e-03,  5.6319e-05],
+        [-5.8441e-05,  2.2856e-02, -5.6763e-03]]).T
 
 # ERROR: linalg.inv: A must be batches of square matrices, but they are 4 by 3 matrices
 # SPEC4_to_RGB_matrix = torch.inverse(RGB_to_SPEC4_matrix)
