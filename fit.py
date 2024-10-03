@@ -1,4 +1,5 @@
 """This is the code used to determine the linear fits to convert to and from SPEC4"""
+from typing import Optional
 import torch
 from torch import Tensor, nn
 from tqdm.autonotebook import tqdm
@@ -57,19 +58,21 @@ class Fitting:
         else:
             raise ValueError(f'Unknown wavelengths model type: {wavelengths_model_type}')
         self.fit_wavelengths = fit_wavelengths
-    def get_train_inputs(self, batch_size) -> Tensor:
+    def get_train_inputs(self, batch_size) -> tuple[Tensor, Optional[Tensor]]:
         raise NotImplementedError
-    def convert_from_xyz(self, xyz: Tensor) -> Tensor:
+    def convert_from_xyz(self, xyz: Tensor, extra: Optional[Tensor]) -> Tensor:
         raise NotImplementedError
-    def get_reconstruction_loss(self, inputs: Tensor, outputs: Tensor) -> Tensor:
+    def postprocess_model_output(self, model_spec4: Tensor, extra: Optional[Tensor]) -> Tensor:
+        return model_spec4
+    def get_reconstruction_loss(self, inputs: Tensor, outputs: Tensor, extra: Optional[Tensor]) -> Tensor:
         """Penalizes not being able to reconstruct the input."""
         return nn.functional.mse_loss(inputs, outputs)
-    def get_constraint_loss(self, spec4: Tensor) -> Tensor:
+    def get_constraint_loss(self, spec4: Tensor, extra: Optional[Tensor]) -> Tensor:
         """Penalizes not satisfying constraints: e.g., non-negativity."""
         positive_constraint_error = torch.relu(-spec4)
         squared_error = positive_constraint_error**2
         return squared_error.mean()
-    def fit(self, num_steps: int = 30_000, batch_size: int = 1024, learning_rate: float = 0.0001, wavelengths_learning_rate: float = 0.01):
+    def fit(self, num_steps: int = 40_000, batch_size: int = 1024, learning_rate: float = 0.0001, wavelengths_learning_rate: float = 0.01):
         self.model.train()
         optimizer = torch.optim.Adam(self.model.parameters(), lr=learning_rate)
         if self.fit_wavelengths:
@@ -81,13 +84,14 @@ class Fitting:
         progress.set_description(f'Fitting {self.name}')
         filtered_loss = 0
         for step in progress:
-            inputs = self.get_train_inputs(batch_size)
-            unclipped_spec4s = self.model(inputs)
-            closs = self.get_constraint_loss(unclipped_spec4s)
+            inputs, extra = self.get_train_inputs(batch_size)
+            model_spec4s = self.model(inputs)
+            unclipped_spec4s = self.postprocess_model_output(model_spec4s, extra)
+            closs = self.get_constraint_loss(unclipped_spec4s, extra)
             padded_spec4s = torch.nn.functional.pad(unclipped_spec4s, (1, 1), value=0.0)
             xyzs = conversions.batched_spectrum_to_XYZ(padded_spec4s, self.wavelengths_model.get_wavelengths())
-            outputs = self.convert_from_xyz(xyzs)
-            rloss = self.get_reconstruction_loss(inputs, outputs)
+            outputs = self.convert_from_xyz(xyzs, extra)
+            rloss = self.get_reconstruction_loss(inputs, outputs, extra)
             loss = rloss + 1000.0*closs
             optimizer.zero_grad()
             loss.backward()
@@ -100,27 +104,32 @@ class Fitting:
 class RGBtoSPEC4Fitting(Fitting):
     def __init__(self):
         super().__init__('RGB to SPEC4', 3, model_type='linear', wavelengths_model_type='standard', fit_wavelengths=False)
-    def get_train_inputs(self, batch_size) -> Tensor:
+    def get_train_inputs(self, batch_size) -> tuple[Tensor, Optional[Tensor]]:
         srgb = torch.rand((batch_size, 3))
         rgb = conversions.batched_sRGB_to_RGB(srgb)
         return rgb
     def convert_from_xyz(self, xyz: Tensor) -> Tensor:
         return conversions.batched_XYZ_to_RGB(xyz)
 
-class XYYtoSPEC4Fitting(Fitting):
+class XYZStoSPEC4Fitting(Fitting):
     def __init__(self):
-        super().__init__('XYY to SPEC4', 3, model_type='linear', wavelengths_model_type='standard', fit_wavelengths=False)
-    def get_train_inputs(self, batch_size) -> Tensor:
+        super().__init__('XYZS to SPEC4', 3, model_type='linear', wavelengths_model_type='standard', fit_wavelengths=False)
+    def get_train_inputs(self, batch_size) -> tuple[Tensor, Optional[Tensor]]:
         srgb = torch.rand((batch_size, 3))
         xyz = conversions.batched_sRGB_to_XYZ(srgb)
-        xyy = conversions.batched_XYZ_to_xyY(xyz)
-        return xyy
-    def convert_from_xyz(self, xyz: Tensor) -> Tensor:
-        return conversions.batched_XYZ_to_xyY(xyz)
+        s = torch.sum(xyz, dim=1, keepdim=True)
+        xyz = xyz / s
+        return xyz, s
+    def postprocess_model_output(self, model_spec4: Tensor, extra: Optional[Tensor]) -> Tensor:
+        return model_spec4 * extra
+    def convert_from_xyz(self, xyz: Tensor, extra: Optional[Tensor]) -> Tensor:
+        s = torch.sum(xyz, dim=1, keepdim=True)
+        xyz = xyz / s
+        return xyz
 
 if __name__ == '__main__':
-    fitting = RGBtoSPEC4Fitting()
-    # fitting = XYYtoSPEC4Fitting()
+    # fitting = RGBtoSPEC4Fitting()
+    fitting = XYZStoSPEC4Fitting()
     print(f"Fitting {fitting.name}...")
     fitting.fit()
     print(f"{fitting.name} weights:")

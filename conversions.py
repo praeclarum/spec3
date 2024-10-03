@@ -113,7 +113,7 @@ RGB_to_SPEC4_matrix = torch.tensor([[ 1.7695e-03,  2.9910e-05,  9.2270e-03],
 # ERROR: linalg.inv: A must be batches of square matrices, but they are 4 by 3 matrices
 # SPEC4_to_RGB_matrix = torch.inverse(RGB_to_SPEC4_matrix)
 
-def batched_RGB_to_SPEC4(rgb: Tensor) -> Tensor:
+def batched_RGB_to_SPEC4(rgb: Tensor, clip: bool = True) -> Tensor:
     """Converts linear RGB to SPEC4.
 
     Args:
@@ -122,7 +122,10 @@ def batched_RGB_to_SPEC4(rgb: Tensor) -> Tensor:
     Returns:
         A tensor of SPEC4 values shaped as (batch_size, 4).
     """
-    return torch.nn.functional.relu(torch.matmul(rgb, RGB_to_SPEC4_matrix))
+    spec4 = torch.matmul(rgb, RGB_to_SPEC4_matrix)
+    if clip:
+        spec4 = torch.nn.functional.relu(spec4)
+    return spec4
 
 def piecewise_gaussian(x: Tensor, mu: float, tau1: float, tau2: float):
     """A piecewise Gaussian function with different slopes on the left and right.
@@ -256,9 +259,51 @@ def batched_SPEC4_to_sRGB(spec4):
     """
     return batched_RGB_to_sRGB(batched_SPEC4_to_RGB(spec4))
 
+def batched_XYZ_to_SPEC4(xyz):
+    """Converts CIE XYZ to SPEC4.
+
+    Args:
+        xyz: A tensor of CIE XYZ values shaped as (batch_size, 3).
+
+    Returns:
+        A tensor of SPEC4 values shaped as (batch_size, 4).
+    """
+    rgb = batched_XYZ_to_RGB(xyz)
+    return batched_RGB_to_SPEC4(rgb)
+
 #
 # Testing
 #
+
+def test_luminance():
+    srgb = torch.tensor([
+        [1.0, 0.0, 0.0],
+        [0.0, 1.0, 0.0],
+        [0.0, 0.0, 1.0],
+        [0.0, 1.0, 1.0],
+        [0.5, 0.5, 0.5],
+        [0.1, 0.1, 0.1],
+        [0.0, 0.0, 0.0],
+    ])
+    print(f"srgb: {srgb}")
+    rgb = batched_sRGB_to_RGB(srgb)
+    print(f"rgb: {rgb}")
+    xyz = batched_sRGB_to_XYZ(rgb)
+    print(f"xyz: {xyz}")
+    xyz2 = 2.0 * xyz
+    xyz_luminance = torch.sum(xyz, dim=1, keepdim=False)
+    xyz_luminance2 = torch.sum(xyz2, dim=1, keepdim=False)
+    print(f"xyz_luminance: {xyz_luminance}")
+    print(f"xyz_luminance2: {xyz_luminance2}")
+    spec4 = batched_XYZ_to_SPEC4(xyz)
+    spec42 = batched_XYZ_to_SPEC4(xyz2)
+    print(f"spec4: {spec4}")
+    print(f"spec42: {spec42}")
+    dwavelength = 60.0
+    spec4_luminance = torch.sum(spec4, dim=1) * dwavelength
+    spec4_luminance2 = torch.sum(spec42, dim=1) * dwavelength
+    print(f"spec4_luminance: {spec4_luminance}")
+    print(f"spec4_luminance2: {spec4_luminance2}")
 
 def test_round_trip(title, input_data, conversion_fn, inverse_fn):
     """Tests that the conversion and inverse functions are consistent."""
@@ -314,6 +359,7 @@ def test_batched_spectrum_to_XYZ():
     print(f"srgb: {srgb}")
 
 def test_all():
+    test_luminance()
     test_XYZ_to_xyY()
     test_sRGB_SPEC4()
     test_sRGB_RGB()
