@@ -2,6 +2,10 @@
 
 import torch
 
+#
+# Primary color space conversion functions
+#
+
 RGB_to_XYZ_matrix = torch.tensor([
     [0.4124564, 0.3575761, 0.1804375],
     [0.2126729, 0.7151522, 0.0721750],
@@ -55,6 +59,37 @@ def batched_XYZ_to_RGB(xyz):
     """
     return torch.matmul(xyz, XYZ_to_RGB_matrix)
 
+#
+# Composite (mult-step) conversions
+#
+
+def batched_sRGB_to_XYZ(srgb):
+    """Converts sRGB to CIE XYZ.
+
+    Args:
+        srgb: A tensor of sRGB values in the range [0, 1]
+              shaped as (batch_size, 3).
+
+    Returns:
+        A tensor of CIE XYZ values shaped as (batch_size, 3).
+    """
+    return batched_RGB_to_XYZ(batched_sRGB_to_RGB(srgb))
+
+def batched_XYZ_to_sRGB(xyz):
+    """Converts CIE XYZ to sRGB.
+
+    Args:
+        xyz: A tensor of CIE XYZ values shaped as (batch_size, 3).
+
+    Returns:
+        A tensor of sRGB values in the range [0, 1] shaped as (batch_size, 3).
+    """
+    return batched_RGB_to_sRGB(batched_XYZ_to_RGB(xyz))
+
+#
+# Testing
+#
+
 def test_round_trip(title, input_data, conversion_fn, inverse_fn):
     """Tests that the conversion and inverse functions are consistent."""
     print(f"Testing {title} conversion...")
@@ -76,9 +111,14 @@ def test_RGB_XYZ():
     input_data = torch.rand(100, 3)
     test_round_trip("RGB to XYZ", input_data, batched_RGB_to_XYZ, batched_XYZ_to_RGB)
 
+def test_sRGB_XYZ():
+    input_data = torch.rand(100, 3)
+    test_round_trip("sRGB to XYZ", input_data, batched_sRGB_to_XYZ, batched_XYZ_to_sRGB)
+
 def test_all_conversions():
     test_sRGB_RGB()
     test_RGB_XYZ()
+    test_sRGB_XYZ()
 
 if __name__ == "__main__":
     test_all_conversions()
