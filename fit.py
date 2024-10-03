@@ -49,6 +49,7 @@ class Fitting:
         self.name = name
         self.in_channels = in_channels
         model_out_channels = 4
+        self.model_type = model_type
         if model_type == 'linear':
             self.model = LinearModel(in_channels, model_out_channels)
         else:
@@ -72,7 +73,7 @@ class Fitting:
         positive_constraint_error = torch.relu(-spec4)
         squared_error = positive_constraint_error**2
         return squared_error.mean()
-    def fit(self, num_steps: int = 40_000, batch_size: int = 1024, learning_rate: float = 0.0001, wavelengths_learning_rate: float = 0.01):
+    def fit(self, num_steps: int = 10_000, batch_size: int = 4*1024, learning_rate: float = 0.0001, wavelengths_learning_rate: float = 0.01):
         self.model.train()
         optimizer = torch.optim.Adam(self.model.parameters(), lr=learning_rate)
         if self.fit_wavelengths:
@@ -98,6 +99,47 @@ class Fitting:
             optimizer.step()
             loss_val = loss.item()
             filtered_loss = loss_val if step == 0 else 0.9 * filtered_loss + 0.1 * loss_val
+            progress.set_postfix(loss=filtered_loss)
+        print(f'Final loss: {filtered_loss:.16f}')
+
+class InverseFitting:
+    """Base class for all inverse fittings."""
+    def __init__(self, fitting: Fitting):
+        self.name = f"Inverse {fitting.name}"
+        self.fitting = fitting
+        self.in_channels = 4
+        model_out_channels = fitting.in_channels
+        if fitting.model_type == 'linear':
+            self.model = LinearModel(self.in_channels, model_out_channels)
+        else:
+            raise ValueError(f'Unknown model type: {fitting.model_type}')
+        self.wavelengths_model = fitting.wavelengths_model
+    def get_reconstruction_loss(self, inputs: Tensor, outputs: Tensor, extra: Optional[Tensor]) -> Tensor:
+        """Penalizes not being able to reconstruct the input."""
+        return nn.functional.mse_loss(inputs, outputs)
+    def fit(self, num_steps: int = 40_000, batch_size: int = 1024, learning_rate: float = 0.0001, wavelengths_learning_rate: float = 0.01):
+        self.model.train()
+        optimizer = torch.optim.Adam(self.model.parameters(), lr=learning_rate)
+        self.wavelengths_model.eval()
+        self.fitting.model.eval()
+        progress = tqdm(range(num_steps))
+        progress.set_description(f'Fitting {self.name}')
+        filtered_loss = 0
+        for step in progress:
+            with torch.no_grad():
+                inputs, extra = self.fitting.get_train_inputs(batch_size)
+                model_spec4s = self.fitting.model(inputs)
+                unclipped_spec4s = self.fitting.postprocess_model_output(model_spec4s, extra)
+                clipped_spec4s = torch.nn.functional.relu(unclipped_spec4s)
+                spec4s = clipped_spec4s
+            inv_inputs = self.model(spec4s)
+            rloss = self.get_reconstruction_loss(inputs, inv_inputs, extra)
+            loss = rloss
+            optimizer.zero_grad()
+            loss.backward()
+            optimizer.step()
+            loss_val = loss.item()
+            filtered_loss = loss_val if step == 0 else 0.99 * filtered_loss + 0.01 * loss_val
             progress.set_postfix(loss=filtered_loss)
         print(f'Final loss: {filtered_loss:.16f}')
 
@@ -131,8 +173,14 @@ if __name__ == '__main__':
     fitting = RGBtoSPEC4Fitting()
     # fitting = XYZStoSPEC4Fitting()
     print(f"Fitting {fitting.name}...")
-    fitting.fit()
+    fitting.fit(num_steps=20_000)
     print(f"{fitting.name} weights:")
     fitting.model.print_weights()
     print(f"{fitting.name} wavelengths:")
     print(repr(fitting.wavelengths_model.get_wavelengths()))
+
+    inverse_fitting = InverseFitting(fitting)
+    print(f"Fitting {inverse_fitting.name}...")
+    inverse_fitting.fit(num_steps=20_000)
+    print(f"{inverse_fitting.name} weights:")
+    inverse_fitting.model.print_weights()
