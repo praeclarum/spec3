@@ -53,12 +53,13 @@ class Fitting:
         filtered_loss = 0
         for step in progress:
             inputs = self.get_train_inputs(batch_size)
-            spec4s = self.model(inputs)
-            xyzs = conversions.batched_SPEC4_to_XYZ(spec4s)
+            unclipped_spec4s = self.model(inputs)
+            closs = self.get_constraint_loss(unclipped_spec4s)
+            clipped_spec4s = nn.functional.relu(unclipped_spec4s)
+            xyzs = conversions.batched_SPEC4_to_XYZ(clipped_spec4s)
             outputs = self.convert_from_xyz(xyzs)
             rloss = self.get_reconstruction_loss(inputs, outputs)
-            closs = self.get_constraint_loss(spec4s)
-            loss = rloss + 100.0*closs
+            loss = rloss + 10.0*closs
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()

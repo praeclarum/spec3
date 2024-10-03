@@ -73,10 +73,10 @@ def tone_map_XYZ(xyz: Tensor) -> Tensor:
     """
     return xyz / (1 + xyz)
 
-RGB_to_SPEC4_matrix = torch.tensor([[ 1.8125e-03, -4.1853e-04,  9.3008e-03],
-        [-2.9494e-04,  2.2335e-02,  3.4295e-03],
-        [ 6.9521e-03, -8.9801e-03,  5.6319e-05],
-        [-5.8441e-05,  2.2856e-02, -5.6763e-03]]).T
+RGB_to_SPEC4_matrix = torch.tensor([[ 1.8737e-03,  7.3024e-05,  8.9951e-03],
+        [-3.6033e-04,  1.3334e-02,  5.9196e-03],
+        [ 6.9121e-03,  2.8212e-03, -2.7885e-03],
+        [-5.5133e-07, -5.5273e-07, -2.0805e-06]]).T
 
 # ERROR: linalg.inv: A must be batches of square matrices, but they are 4 by 3 matrices
 # SPEC4_to_RGB_matrix = torch.inverse(RGB_to_SPEC4_matrix)
@@ -90,7 +90,7 @@ def batched_RGB_to_SPEC4(rgb: Tensor) -> Tensor:
     Returns:
         A tensor of SPEC4 values shaped as (batch_size, 4).
     """
-    return torch.matmul(rgb, RGB_to_SPEC4_matrix)
+    return torch.nn.functional.relu(torch.matmul(rgb, RGB_to_SPEC4_matrix))
 
 def piecewise_gaussian(x: Tensor, mu: float, tau1: float, tau2: float):
     """A piecewise Gaussian function with different slopes on the left and right.
@@ -238,7 +238,7 @@ def test_round_trip(title, input_data, conversion_fn, inverse_fn):
     n = input_data.shape[0]
     errors = torch.sum((inv_input_data - input_data)**2, dim=1)
     mse_error = torch.mean(errors)
-    for i in range(min(n, 3)):
+    for i in range(min(n, 32)):
         error = errors[i]
         print(f"  error={error:.4f} from {input_data[i]} to {output_data[i]} back to {inv_input_data[i]}")
     print(f"{title} mean squared error: {mse_error:.12f}")
