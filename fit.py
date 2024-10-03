@@ -153,6 +153,16 @@ class RGBtoSPEC4Fitting(Fitting):
     def convert_from_xyz(self, xyz: Tensor, extra: Optional[Tensor]) -> Tensor:
         return conversions.batched_XYZ_to_RGB(xyz)
 
+class XYZtoSPEC4Fitting(Fitting):
+    def __init__(self):
+        super().__init__('XYZ to SPEC4', 3, model_type='linear', wavelengths_model_type='standard', fit_wavelengths=False)
+    def get_train_inputs(self, batch_size) -> tuple[Tensor, Optional[Tensor]]:
+        srgb = torch.rand((batch_size, 3))
+        xyz = conversions.batched_sRGB_to_XYZ(srgb)
+        return xyz, None
+    def convert_from_xyz(self, xyz: Tensor, extra: Optional[Tensor]) -> Tensor:
+        return xyz
+
 class XYZStoSPEC4Fitting(Fitting):
     def __init__(self):
         super().__init__('XYZS to SPEC4', 3, model_type='linear', wavelengths_model_type='standard', fit_wavelengths=False)
@@ -170,10 +180,10 @@ class XYZStoSPEC4Fitting(Fitting):
         return xyz
 
 if __name__ == '__main__':
-    fitting = RGBtoSPEC4Fitting()
-    # fitting = XYZStoSPEC4Fitting()
+    # fitting = RGBtoSPEC4Fitting()
+    fitting = XYZtoSPEC4Fitting()
     print(f"Fitting {fitting.name}...")
-    fitting.fit(num_steps=20_000)
+    fitting.fit(num_steps=30_000)
     print(f"{fitting.name} weights:")
     fitting.model.print_weights()
     print(f"{fitting.name} wavelengths:")
@@ -181,6 +191,6 @@ if __name__ == '__main__':
 
     inverse_fitting = InverseFitting(fitting)
     print(f"Fitting {inverse_fitting.name}...")
-    inverse_fitting.fit(num_steps=20_000)
+    inverse_fitting.fit(num_steps=100_000)
     print(f"{inverse_fitting.name} weights:")
     inverse_fitting.model.print_weights()

@@ -105,13 +105,17 @@ def batched_xyY_to_XYZ(xyY: Tensor) -> Tensor:
 
 spec4_wavelengths = torch.tensor([400.0, 460.0, 520.0, 580.0, 640.0, 700.0])
 
-RGB_to_SPEC4_matrix = torch.tensor([[ 1.7695e-03,  2.9910e-05,  9.2270e-03],
-        [ 8.2094e-04,  1.3803e-02,  5.1758e-03],
-        [ 5.4744e-03,  2.2374e-03, -2.2369e-03],
-        [ 2.8392e-03,  1.1650e-03, -1.1494e-03]]).T
+RGB_to_SPEC4_matrix = torch.tensor([[ 1.7350e-03,  1.7194e-05,  9.2140e-03],
+        [ 1.3098e-03,  1.3882e-02,  5.1297e-03],
+        [ 4.8327e-03,  2.1318e-03, -2.1668e-03],
+        [ 4.0426e-03,  1.3245e-03, -1.3198e-03]]).T
 
 # ERROR: linalg.inv: A must be batches of square matrices, but they are 4 by 3 matrices
 # SPEC4_to_RGB_matrix = torch.inverse(RGB_to_SPEC4_matrix)
+
+SPEC4_to_XYZ_matrix = torch.tensor([[ 9.8939, 10.1874, 10.1392, 10.1701],
+        [ 9.6922,  9.8004,  9.5912,  9.6659],
+        [ 9.4744, 10.1183,  9.8699,  9.4975]]).T
 
 def batched_RGB_to_SPEC4(rgb: Tensor, clip: bool = True) -> Tensor:
     """Converts linear RGB to SPEC4.
@@ -248,6 +252,9 @@ def batched_SPEC4_to_RGB(spec4: Tensor) -> Tensor:
     xyz = batched_SPEC4_to_XYZ(spec4)
     return batched_XYZ_to_RGB(xyz)
 
+def batched_SPEC4_to_XYZ_fast(spec4: Tensor) -> Tensor:
+    return torch.matmul(spec4, SPEC4_to_XYZ_matrix)
+
 def batched_SPEC4_to_sRGB(spec4):
     """Converts SPEC4 to sRGB in the range [0, 1].
 
@@ -339,6 +346,11 @@ def test_sRGB_SPEC4():
     input_data = torch.rand(100, 3)
     test_round_trip("sRGB to SPEC4", input_data, batched_sRGB_to_SPEC4, batched_SPEC4_to_sRGB)
 
+def test_SPEC4_RGB_fast():
+    srgb = torch.rand(100, 3)
+    rgb = batched_sRGB_to_RGB(srgb)
+    test_round_trip("SPEC4 to RGB fast", rgb, batched_RGB_to_SPEC4, batched_SPEC4_to_RGB_fast)
+
 def test_batched_spectrum_to_XYZ():
     wavelengths = torch.tensor([
         550.0, 650.0,
@@ -366,6 +378,7 @@ def test_all():
     test_RGB_XYZ()
     test_sRGB_XYZ()
     test_batched_spectrum_to_XYZ()
+    test_SPEC4_RGB_fast()
 
 if __name__ == "__main__":
     test_all()
