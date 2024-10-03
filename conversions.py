@@ -73,6 +73,36 @@ def tone_map_XYZ(xyz: Tensor) -> Tensor:
     """
     return xyz / (1 + xyz)
 
+def batched_XYZ_to_xyY(xyz: Tensor, eps: float=1e-7) -> Tensor:
+    """Converts CIE XYZ to CIE xyY.
+
+    Args:
+        xyz: A tensor of CIE XYZ values shaped as (batch_size, 3).
+        eps: A small value to avoid division by zero when normalizing.
+
+    Returns:
+        A tensor of CIE xyY values shaped as (batch_size, 3).
+    """
+    sum_xyz = torch.sum(xyz, dim=1, keepdim=True)
+    xy = xyz[:, :2] / (sum_xyz + eps)
+    Y = xyz[:, 1:2]
+    return torch.cat([xy, Y], dim=1)
+
+def batched_xyY_to_XYZ(xyY: Tensor) -> Tensor:
+    """Converts CIE xyY to CIE XYZ.
+
+    Args:
+        xyY: A tensor of CIE xyY values shaped as (batch_size, 3).
+
+    Returns:
+        A tensor of CIE XYZ values shaped as (batch_size, 3).
+    """
+    x, y, Y = xyY[:, 0], xyY[:, 1], xyY[:, 2]
+    scale = Y / y
+    X = x * scale
+    Z = (1 - x - y) * scale
+    return torch.stack([X, Y, Z], dim=1)
+
 spec4_wavelengths = torch.tensor([400.0, 460.0, 520.0, 580.0, 640.0, 700.0])
 
 RGB_to_SPEC4_matrix = torch.tensor([[ 1.6227e-03, -4.7853e-05,  9.0417e-03],
@@ -244,6 +274,10 @@ def test_round_trip(title, input_data, conversion_fn, inverse_fn):
         print(f"  error={error:.4f} from {input_data[i]} to {output_data[i]} back to {inv_input_data[i]}")
     print(f"{title} mean squared error: {mse_error:.12f}")
 
+def test_XYZ_to_xyY():
+    input_data = torch.rand(100, 3)
+    test_round_trip("XYZ to xyY", input_data, batched_XYZ_to_xyY, batched_xyY_to_XYZ)
+
 def test_sRGB_RGB():
     input_data = torch.rand(100, 3)
     test_round_trip("sRGB to RGB", input_data, batched_sRGB_to_RGB, batched_RGB_to_sRGB)
@@ -280,6 +314,7 @@ def test_batched_spectrum_to_XYZ():
     print(f"srgb: {srgb}")
 
 def test_all():
+    test_XYZ_to_xyY()
     test_sRGB_SPEC4()
     test_sRGB_RGB()
     test_RGB_XYZ()
