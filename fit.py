@@ -100,7 +100,7 @@ class Fitting:
 
 class RGBtoSPEC4Fitting(Fitting):
     def __init__(self):
-        super().__init__('RGB to SPEC4', 3, model_type='linear', wavelengths_model_type='standard', fit_wavelengths=True)
+        super().__init__('RGB to SPEC4', 3, model_type='linear', wavelengths_model_type='standard', fit_wavelengths=False)
     def get_train_inputs(self, batch_size) -> Tensor:
         srgb = torch.rand((batch_size, 3))
         rgb = conversions.batched_sRGB_to_RGB(srgb)
