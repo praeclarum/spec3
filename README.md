@@ -15,18 +15,21 @@ Individual radiances can be computed at any wavelength
 using linear interpolation. This means that the color space can represent any color in the visible spectrum
 along with any UV and IR "colors" in a 412nm window by tracking a wavelength offset.
 
-The wavelength selection was chosen to provide a balance between information loss producing spectra with only positive values.
+The wavelengths were chosen as a balance between information loss
+and avoiding spectra with negative values. Negative values are
+physically unreal and can be safely clipped away.
 
 Because the color space of SPEC3 directly measures energy,
 addition of colors is simple vector addition. Because the energies
 never need to be clipped, the color space is suitable for
-high dynamic range rendering.
+high dynamic range rendering. Conversion back to XYZ will provide an
+HDR color that can be toned mapped to a display.
 
 The color space is designed to be linearly convertible from CIE XYZ and linear RGB color spaces with a minimal loss of information. Conversion is a simple linear transform so it's fast to convert to and from SPEC3.
 
 ## Conversion Functions
 
-A nice feature of SPEC3 is that it's linearly convertible from CIE XYZ and RGB color spaces. Here are the conversion functions:
+A nice feature of SPEC3 is that it's linearly convertible from CIE XYZ and linear RGB color spaces. Here are the conversion functions:
 
 ```python
 def xyz_to_spec3(x, y, z):
