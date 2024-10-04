@@ -1,22 +1,26 @@
 # SPEC3 Color Space
 
-SPEC3 is a new color format that represents colors using a
-4-point spectrogram in the human perceptual color space.
+SPEC3 is a new color space that represents colors using a light spectrum compactly represented as 3 values (SX, SY, and SZ) that specifies 3 spectral radiances at the wavelengths 440, 545, and 630nm.
 
-Each of the four points represents the spectral radiance
-(watts per steradian per square meter per nanometer, don't worry about it) of a bandwidth of light.
+The three values are combined with two bounding points to form a 5-point spectrum:
 
-The four points are:
+* *ɑ* at 345 nm (implicitly always = 0)
+* **SX** at 440 nm
+* **SY** at 545 nm
+* **SZ** at 630 nm
+* *ω* at 750 nm (implicitly always = 0)
 
-* *ɑ* at 400 nm (implicitly always = 0)
-* **SX** at 460 nm
-* **SY** at 520 nm
-* **SZ** at 580 nm
-* **SW** at 640 nm
-* *ω* at 700 nm (implicitly always = 0)
+Individual radiances can be computed at any wavelength 
+(within the bounds of 345nm to 750nm)
+using linear interpolation. This means that the color space can represent any color in the visible spectrum along with
+any UV and IR "colors" in a 405nm window by simply tracking a wavelength offset.
 
-The values SX, SY, SZ, and SW are the radiance of the color at the respective wavelengths but are not computed to be impulses at those wavelengths. Instead, they are computed to be the average radiance of the color over the bandwidth of the respective wavelength. If you're not into color theory, again, don't worry about it - I just want to be clear. For details see `fit.py`.
+Because teh color space of SPEC3 directly measure energy,
+addition of colors is simple addition. Because the energies
+never need to be clipped, the color space is suitable for
+high dynamic range rendering.
 
+The color space is designed to be linearly convertible from CIE XYZ and RGB color spaces with minimal loss of information. Conversion is a simple linear transform so it's fast to convert to and from SPEC3.
 
 ## Conversion Functions
 
