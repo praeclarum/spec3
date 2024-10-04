@@ -453,6 +453,8 @@ def test_mat44():
 
     XYZ_to_SPEC4_matrix
     XYZ_to_SPEC4_square_matrix_p = torch.inverse(SPEC4_to_XYZ_square_matrix_p)
+    xyz41 = torch.cat([xyz, torch.tensor([0.0])])
+    xyz41 @ XYZ_to_SPEC4_square_matrix_p
     xyz4 @ XYZ_to_SPEC4_square_matrix_p
     xyz @ XYZ_to_SPEC4_matrix
 
