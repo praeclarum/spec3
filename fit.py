@@ -22,7 +22,7 @@ class StandardWavelengthsModel(WavelengthsModel):
     """A model that predicts the standard wavelengths of the SPEC4 channels."""
     def __init__(self):
         super().__init__()
-        self.wavelengths = nn.Parameter(conversions.spec4_wavelengths.clone())
+        self.wavelengths = nn.Parameter(conversions.SPEC4_wavelengths.clone())
     def get_wavelengths(self) -> Tensor:
         return self.wavelengths
 

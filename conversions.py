@@ -23,7 +23,7 @@ XYZ_to_SPEC4_matrix = torch.tensor([[ 0.0010689063929021, -0.0012935890117660,  
 
 RGB_to_SPEC4_matrix = torch.matmul(RGB_to_XYZ_matrix, XYZ_to_SPEC4_matrix)
 
-spec4_wavelengths = torch.tensor([400.0, 460.0, 520.0, 580.0, 640.0, 700.0])
+SPEC4_wavelengths = torch.tensor([400.0, 460.0, 520.0, 580.0, 640.0, 700.0])
 
 
 #
@@ -197,11 +197,11 @@ def batched_SPEC4_to_XYZ(spec4: Tensor) -> Tensor:
         A tensor of CIE XYZ values shaped as (batch_size, 3).
     """
     spectrum = torch.nn.functional.pad(spec4, (1, 1), value=0.0)
-    xyz = batched_spectrum_to_XYZ(spectrum, spec4_wavelengths)
+    xyz = batched_spectrum_to_XYZ(spectrum, SPEC4_wavelengths)
     return xyz
 
-spec4_wavelength_xyz_color_matching = xyz_color_matching(spec4_wavelengths)
-spec4_dwavelength = spec4_wavelengths[1:] - spec4_wavelengths[:-1]
+spec4_wavelength_xyz_color_matching = xyz_color_matching(SPEC4_wavelengths)
+spec4_dwavelength = SPEC4_wavelengths[1:] - SPEC4_wavelengths[:-1]
 spec4_dwavelength_mean = torch.mean(spec4_dwavelength).item()
 
 SPEC4_to_XYZ_matrix = spec4_dwavelength_mean * torch.stack([
@@ -411,5 +411,25 @@ def test_all():
     test_XYZ_SPEC4()
     test_SPEC4_XYZ_fast()
 
+def print_matrix(matrix, name, in_names, out_names):
+    """Writes the code to execute out_names = matrix * in_names."""
+    in_params = ", ".join(in_names)
+    print(f"def {name}({in_params}):")
+    for j, out_name in enumerate(out_names):
+        out_expr = " + ".join([f"{matrix[i, j]:.12f} * {in_name}" for i, in_name in enumerate(in_names)])
+        print(f"    {out_name} = {out_expr}")
+    print(f"    return {', '.join(out_names)}")
+
+def print_matrices():
+    print("```python")
+    print_matrix(XYZ_to_SPEC4_matrix, "xyz_to_spec4", ["x", "y", "z"], ["sx", "sy", "sz", "sw"])
+    print()
+    print_matrix(SPEC4_to_XYZ_matrix, "spec4_to_xyz", ["sx", "sy", "sz", "sw"], ["x", "y", "z"])
+    print()
+    print_matrix(RGB_to_SPEC4_matrix, "rgb_to_spec4", ["r", "g", "b"], ["sx", "sy", "sz", "sw"])
+    # print_matrix(SPEC4_to_RGB_matrix, "spec4_to_rgb", ["sx", "sy", "sz", "sw"], ["r", "g", "b"])
+    print("```")
+
 if __name__ == "__main__":
     test_all()
+    print_matrices()
