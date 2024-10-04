@@ -15,7 +15,6 @@ RGB_to_XYZ_left_matrix = torch.tensor([
 ])
 RGB_to_XYZ_right_matrix = RGB_to_XYZ_left_matrix.T
 
-XYZ_to_RGB_left_matrix = torch.inverse(RGB_to_XYZ_left_matrix)
 XYZ_to_RGB_right_matrix = torch.inverse(RGB_to_XYZ_right_matrix)
 
 
@@ -401,65 +400,5 @@ def test_all():
     test_sRGB_SPEC3()
     test_XYZ_SPEC3()
 
-def print_matrix(matrix, name, in_names, out_names):
-    """Writes the code to execute out_names = matrix * in_names."""
-    in_params = ", ".join(in_names)
-    print(f"def {name}({in_params}):")
-    for j, out_name in enumerate(out_names):
-        out_expr = ""
-        for i, in_name in enumerate(in_names):
-            value = matrix[i, j].item()
-            if i == 0:
-                if value < 0.0:
-                    prefix = "-"
-                else:
-                    prefix = ""
-            else:
-                if value < 0.0:
-                    prefix = " - "
-                else:
-                    prefix = " + "
-            out_expr += prefix + f"{abs(value):.12f} * {in_name}"
-        print(f"    {out_name} = {out_expr}")
-    print(f"    return {', '.join(out_names)}")
-
-def print_vectorized_matrix(matrix, name, in_name):
-    """Writes the code to execute out_vector = matrix * in_vector."""
-    in_channels = matrix.shape[0]
-    out_channels = matrix.shape[1]
-    print(f"{name}({in_name}: vec{in_channels}<f32>) -> vec{out_channels}<f32> {{")
-    print(f"    const {name}: mat{out_channels}x{in_channels}<f32> = mat{out_channels}x{in_channels}(")
-    for j in range(out_channels):
-        print("        ", end="")
-        for i in range(in_channels):
-            value = matrix[i, j].item()
-            if value < 0.0:
-                prefix = "-"
-            else:
-                prefix = ""
-            print(f"{prefix}{abs(value):.12f}, ", end="")
-        print()
-    print("    );")
-    print(f"    return {name} * {in_name};")
-    print("}")
-
-def print_matrices():
-    print("```python")
-    print_matrix(XYZ_to_SPEC3_right_matrix, "xyz_to_spec3", ["x", "y", "z"], ["sx", "sy", "sz", "sw"])
-    print_matrix(SPEC3_to_XYZ_right_matrix, "spec3_to_xyz", ["sx", "sy", "sz", "sw"], ["x", "y", "z"])
-    print()
-    print_matrix(RGB_to_SPEC3_right_matrix, "rgb_to_spec3", ["r", "g", "b"], ["sx", "sy", "sz", "sw"])
-    print_matrix(SPEC3_to_RGB_right_matrix, "spec3_to_rgb", ["sx", "sy", "sz", "sw"], ["r", "g", "b"])
-    print("```")
-    print()
-    print("```javascript")
-    print_vectorized_matrix(XYZ_to_SPEC3_right_matrix, "xyz_to_spec3", "xyz")
-    print_vectorized_matrix(SPEC3_to_XYZ_right_matrix, "spec3_to_xyz", "spec3")
-    print()
-    print_vectorized_matrix(RGB_to_SPEC3_right_matrix, "rgb_to_spec3", "rgb")
-    print_vectorized_matrix(SPEC3_to_RGB_right_matrix, "spec3_to_rgb", "spec3")
-    print("```")
-
 if __name__ == "__main__":
     test_all()
-    # print_matrices()
