@@ -187,19 +187,6 @@ def batched_spectrum_to_XYZ(spectral_radiance: Tensor, wavelengths: Tensor) -> T
     xyz = torch.sum(mean_matched_radiance * dwavelength.unsqueeze(0).unsqueeze(-1), dim=1)
     return xyz
 
-def batched_SPEC4_to_XYZ(spec4: Tensor) -> Tensor:
-    """Converts SPEC4 to CIE XYZ.
-
-    Args:
-        spec4: A tensor of SPEC4 values shaped as (batch_size, 4).
-
-    Returns:
-        A tensor of CIE XYZ values shaped as (batch_size, 3).
-    """
-    spectrum = torch.nn.functional.pad(spec4, (1, 1), value=0.0)
-    xyz = batched_spectrum_to_XYZ(spectrum, SPEC4_wavelengths)
-    return xyz
-
 spec4_wavelength_xyz_color_matching = xyz_color_matching(SPEC4_wavelengths)
 spec4_dwavelength = SPEC4_wavelengths[1:] - SPEC4_wavelengths[:-1]
 spec4_dwavelength_mean = torch.mean(spec4_dwavelength).item()
@@ -211,7 +198,9 @@ SPEC4_to_XYZ_matrix = spec4_dwavelength_mean * torch.stack([
     spec4_wavelength_xyz_color_matching[4, :]
 ], dim=1).T
 
-def batched_SPEC4_to_XYZ_fast(spec4: Tensor) -> Tensor:
+SPEC4_to_RGB_matrix = torch.matmul(SPEC4_to_XYZ_matrix, XYZ_to_RGB_matrix)
+
+def batched_SPEC4_to_XYZ(spec4: Tensor) -> Tensor:
     """Converts SPEC4 to CIE XYZ.
 
     Args:
@@ -271,10 +260,7 @@ def batched_SPEC4_to_RGB(spec4: Tensor) -> Tensor:
     Returns:
         A tensor of linear RGB values shaped as (batch_size, 3).
     """
-    # Would like to do this, but the matrix is not square
-    # return torch.matmul(spec4, SPEC4_to_RGB_matrix)
-    xyz = batched_SPEC4_to_XYZ(spec4)
-    return batched_XYZ_to_RGB(xyz)
+    return torch.matmul(spec4, SPEC4_to_RGB_matrix)
 
 def batched_SPEC4_to_sRGB(spec4):
     """Converts SPEC4 to sRGB in the range [0, 1].
@@ -394,12 +380,6 @@ def test_batched_spectrum_to_XYZ():
     srgb = batched_XYZ_to_sRGB(mapped_xyz)
     print(f"srgb: {srgb}")
 
-def test_SPEC4_XYZ_fast():
-    srgb = torch.rand(100, 3)
-    xyz = batched_sRGB_to_XYZ(srgb)
-    test_round_trip("SPEC4 to XYZ fast", xyz, batched_XYZ_to_SPEC4, batched_SPEC4_to_XYZ_fast)
-    test_round_trip("SPEC4 to XYZ std", xyz, batched_XYZ_to_SPEC4, batched_SPEC4_to_XYZ)
-
 def test_all():
     test_luminance()
     test_XYZ_to_xyY()
@@ -409,7 +389,6 @@ def test_all():
     test_batched_spectrum_to_XYZ()
     test_sRGB_SPEC4()
     test_XYZ_SPEC4()
-    test_SPEC4_XYZ_fast()
 
 def print_matrix(matrix, name, in_names, out_names):
     """Writes the code to execute out_names = matrix * in_names."""
@@ -423,11 +402,10 @@ def print_matrix(matrix, name, in_names, out_names):
 def print_matrices():
     print("```python")
     print_matrix(XYZ_to_SPEC4_matrix, "xyz_to_spec4", ["x", "y", "z"], ["sx", "sy", "sz", "sw"])
-    print()
     print_matrix(SPEC4_to_XYZ_matrix, "spec4_to_xyz", ["sx", "sy", "sz", "sw"], ["x", "y", "z"])
     print()
     print_matrix(RGB_to_SPEC4_matrix, "rgb_to_spec4", ["r", "g", "b"], ["sx", "sy", "sz", "sw"])
-    # print_matrix(SPEC4_to_RGB_matrix, "spec4_to_rgb", ["sx", "sy", "sz", "sw"], ["r", "g", "b"])
+    print_matrix(SPEC4_to_RGB_matrix, "spec4_to_rgb", ["sx", "sy", "sz", "sw"], ["r", "g", "b"])
     print("```")
 
 if __name__ == "__main__":
