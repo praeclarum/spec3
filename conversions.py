@@ -110,10 +110,10 @@ RGB_to_SPEC4_matrix = torch.tensor([[ 1.7350e-03,  1.7194e-05,  9.2140e-03],
         [ 4.8327e-03,  2.1318e-03, -2.1668e-03],
         [ 4.0426e-03,  1.3245e-03, -1.3198e-03]]).T
 
-XYZ_to_SPEC4_matrix = torch.tensor([[ 0.0011, -0.0013,  0.0098],
-        [-0.0208,  0.0253,  0.0025],
-        [ 0.0153, -0.0012, -0.0024],
-        [ 0.0079, -0.0006, -0.0012]]).T
+XYZ_to_SPEC4_matrix = torch.tensor([[ 0.0010689063929021, -0.0012935890117660,  0.0098241865634918],
+        [-0.0208281930536032,  0.0253394413739443,  0.0024684802629054],
+        [ 0.0152420969679952, -0.0012280920054764, -0.0023993346840143],
+        [ 0.0078805284574628, -0.0006411729846150, -0.0012423484586179]]).T
 
 def batched_RGB_to_SPEC4(rgb: Tensor, clip: bool = True) -> Tensor:
     """Converts linear RGB to SPEC4.
@@ -398,14 +398,14 @@ def test_SPEC4_XYZ_fast():
     test_round_trip("SPEC4 to XYZ std", xyz, batched_XYZ_to_SPEC4, batched_SPEC4_to_XYZ)
 
 def test_all():
-    # test_luminance()
-    # test_XYZ_to_xyY()
-    # test_sRGB_RGB()
-    # test_RGB_XYZ()
-    # test_sRGB_XYZ()
-    # test_batched_spectrum_to_XYZ()
-    # test_sRGB_SPEC4()
-    # test_XYZ_SPEC4()
+    test_luminance()
+    test_XYZ_to_xyY()
+    test_sRGB_RGB()
+    test_RGB_XYZ()
+    test_sRGB_XYZ()
+    test_batched_spectrum_to_XYZ()
+    test_sRGB_SPEC4()
+    test_XYZ_SPEC4()
     test_SPEC4_XYZ_fast()
 
 if __name__ == "__main__":
