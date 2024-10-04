@@ -193,6 +193,9 @@ class XYZWavelengthFitting:
         srgb = torch.rand((batch_size, 3))
         xyz = conversions.batched_sRGB_to_XYZ(srgb)
         return xyz, None
+    def get_reconstruction_loss(self, inputs: Tensor, outputs: Tensor, extra: Optional[Tensor]) -> Tensor:
+        """Penalizes not being able to reconstruct the input."""
+        return nn.functional.mse_loss(inputs, outputs)
     def get_constraint_loss(self, spec4: Tensor, extra: Optional[Tensor]) -> Tensor:
         """Penalizes not satisfying constraints: e.g., non-negativity."""
         positive_constraint_error = torch.relu(-spec4)
@@ -222,49 +225,56 @@ class XYZWavelengthFitting:
             d*mean_dw[3]
         ], dim=1).T
         return matrix
-    def get_XYZ_to_SPEC4_matrix(self, wavelengths: Tensor) -> Tensor:
-        SPEC4_to_XYZ_matrix = self.get_SPEC4_to_XYZ_matrix(wavelengths)
+    def get_XYZ_to_SPEC4_matrix(self, SPEC4_to_XYZ_matrix: Tensor) -> Tensor:
         SPEC4_to_XYZ_square_matrix = torch.cat([
             SPEC4_to_XYZ_matrix,
             torch.ones(SPEC4_to_XYZ_matrix.shape[0], 1)], dim=1)
         XYZ_to_SPEC4_square_matrix = torch.inverse(SPEC4_to_XYZ_square_matrix)
         XYZ_to_SPEC4_matrix = XYZ_to_SPEC4_square_matrix[:-1, :]
         return XYZ_to_SPEC4_matrix
-    def fit(self, num_steps: int = 10_000, batch_size=4*1024, wavelengths_learning_rate: float = 0.001):
+    def fit(self, num_steps: int = 10_000, batch_size=8*1024, wavelengths_learning_rate: float = 0.001):
         self.wavelengths_model.train()
         optimizer = torch.optim.Adam(self.wavelengths_model.parameters(), lr=wavelengths_learning_rate)
         progress = tqdm(range(num_steps))
         progress.set_description(f'Fitting {self.name}')
-        filtered_loss = 0
+        filtered_loss = 0.0
+        filtered_rloss = 0.0
+        filtered_closs = 0.0
         for step in progress:
             with torch.no_grad():
                 inputs, extra = self.get_train_inputs(batch_size)
             wavelengths = self.wavelengths_model.get_wavelengths()
-            XYZ_to_SPEC4_square_matrix = self.get_XYZ_to_SPEC4_matrix(wavelengths)
-            unclipped_spec4s = torch.matmul(inputs, XYZ_to_SPEC4_square_matrix)
-            closs = self.get_constraint_loss(unclipped_spec4s, extra)
-            loss = closs
+            SPEC4_to_XYZ_matrix = self.get_SPEC4_to_XYZ_matrix(wavelengths)
+            XYZ_to_SPEC4_matrix = self.get_XYZ_to_SPEC4_matrix(SPEC4_to_XYZ_matrix)
+            unclipped_spec4s = torch.matmul(inputs, XYZ_to_SPEC4_matrix)
+            clipped_spec4s = torch.nn.functional.relu(unclipped_spec4s)
+            rec_xyzs = torch.matmul(clipped_spec4s, SPEC4_to_XYZ_matrix)
+            rloss = self.get_reconstruction_loss(inputs, rec_xyzs, extra)
+            closs = 2000.0 * self.get_constraint_loss(unclipped_spec4s, extra)
+            loss = rloss + closs
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
-            loss_val = loss.item()
-            filtered_loss = loss_val if step == 0 else 0.9 * filtered_loss + 0.1 * loss_val
-            progress.set_postfix(loss=filtered_loss)
+            rloss_val = rloss.item()
+            closs_val = closs.item()
+            filtered_closs = closs_val if step == 0 else 0.99 * filtered_closs + 0.01 * closs_val
+            filtered_rloss = rloss_val if step == 0 else 0.99 * filtered_rloss + 0.01 * rloss_val
+            progress.set_postfix(rloss=filtered_rloss, closs=filtered_closs)
         print(f'Final loss: {filtered_loss:.16f}')
 
 if __name__ == '__main__':
     wfitting = XYZWavelengthFitting()
     print(f"Fitting {wfitting.name}...")
-    wfitting.fit(num_steps=200_000)
+    wfitting.fit(num_steps=400_000)
     wfitting.wavelengths_model.eval()
     with torch.no_grad():
         torch.set_printoptions(precision=12)
         wavelengths = wfitting.wavelengths_model.get_wavelengths().detach().clone()
         print(f"SPEC4_wavelengths = {repr(wavelengths)}")
-        XYZ_to_SPEC4_matrix = wfitting.get_XYZ_to_SPEC4_matrix(wavelengths)
-        print("XYZ_to_SPEC4_matrix =", repr(XYZ_to_SPEC4_matrix))
         SPEC4_to_XYZ_matrix = wfitting.get_SPEC4_to_XYZ_matrix(wavelengths)
         print(f"SPEC4_to_XYZ_matrix = {repr(SPEC4_to_XYZ_matrix)}")
+        XYZ_to_SPEC4_matrix = wfitting.get_XYZ_to_SPEC4_matrix(SPEC4_to_XYZ_matrix)
+        print("XYZ_to_SPEC4_matrix =", repr(XYZ_to_SPEC4_matrix))
     
     fittings = [
         # RGBtoSPEC4Fitting(),

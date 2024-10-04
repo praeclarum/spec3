@@ -1,7 +1,7 @@
 """Collection of functions to convert between different color spaces."""
 
 import torch
-from torch import Tensor
+from torch import Tensor, tensor
 
 
 #
@@ -16,14 +16,21 @@ RGB_to_XYZ_matrix = torch.tensor([
 
 XYZ_to_RGB_matrix = torch.inverse(RGB_to_XYZ_matrix)
 
-XYZ_to_SPEC4_matrix = torch.tensor([[ 0.0010689063929021, -0.0012935890117660,  0.0098241865634918],
-        [-0.0208281930536032,  0.0253394413739443,  0.0024684802629054],
-        [ 0.0152420969679952, -0.0012280920054764, -0.0023993346840143],
-        [ 0.0078805284574628, -0.0006411729846150, -0.0012423484586179]]).T
+XYZ_to_SPEC4_matrix = tensor([[ 0.003690333106, -0.025171587244, -0.003467378207,  0.024948639795],
+        [-0.000365949498,  0.002398864832,  0.014990398660, -0.017023324966],
+        [ 0.002885613823,  0.001203401247,  0.000586124836, -0.004675141070]])
+
+SPEC4_to_XYZ_matrix = tensor([[5.950210189819e+01, 8.023788452148e+00, 3.265359802246e+02],
+        [6.316485404968e+00, 6.619062900543e+00, 4.782874679565e+01],
+        [5.129846191406e+01, 8.559075164795e+01, 3.175551891327e-01],
+        [4.478338623047e+01, 1.738681602478e+01, 4.551880010695e-06]])
+
+SPEC4_to_RGB_matrix = torch.matmul(SPEC4_to_XYZ_matrix, XYZ_to_RGB_matrix)
 
 RGB_to_SPEC4_matrix = torch.matmul(RGB_to_XYZ_matrix, XYZ_to_SPEC4_matrix)
 
-SPEC4_wavelengths = torch.tensor([400.0, 460.0, 520.0, 580.0, 640.0, 700.0])
+SPEC4_wavelengths = tensor([104.364212036133, 454.766265869141, 477.703643798828, 559.523559570312,
+        650.238708496094, 879.291198730469])
 
 
 #
@@ -186,19 +193,6 @@ def batched_spectrum_to_XYZ(spectral_radiance: Tensor, wavelengths: Tensor) -> T
     mean_matched_radiance = (matched_radiance[:, :-1, :] + matched_radiance[:, 1:, :]) / 2
     xyz = torch.sum(mean_matched_radiance * dwavelength.unsqueeze(0).unsqueeze(-1), dim=1)
     return xyz
-
-spec4_wavelength_xyz_color_matching = xyz_color_matching(SPEC4_wavelengths)
-spec4_dwavelength = SPEC4_wavelengths[1:] - SPEC4_wavelengths[:-1]
-spec4_dwavelength_mean = torch.mean(spec4_dwavelength).item()
-
-SPEC4_to_XYZ_matrix = spec4_dwavelength_mean * torch.stack([
-    spec4_wavelength_xyz_color_matching[1, :],
-    spec4_wavelength_xyz_color_matching[2, :],
-    spec4_wavelength_xyz_color_matching[3, :],
-    spec4_wavelength_xyz_color_matching[4, :]
-], dim=1).T
-
-SPEC4_to_RGB_matrix = torch.matmul(SPEC4_to_XYZ_matrix, XYZ_to_RGB_matrix)
 
 def batched_SPEC4_to_XYZ(spec4: Tensor) -> Tensor:
     """Converts SPEC4 to CIE XYZ.
@@ -476,5 +470,5 @@ def print_matrices():
     print("```")
 
 if __name__ == "__main__":
-    # test_all()
-    print_matrices()
+    test_all()
+    # print_matrices()
