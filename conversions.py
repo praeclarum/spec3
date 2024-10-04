@@ -18,19 +18,6 @@ RGB_to_XYZ_right_matrix = RGB_to_XYZ_left_matrix.T
 XYZ_to_RGB_left_matrix = torch.inverse(RGB_to_XYZ_left_matrix)
 XYZ_to_RGB_right_matrix = torch.inverse(RGB_to_XYZ_right_matrix)
 
-SPEC3_standard_wavelengths = tensor([345.0, 440.0, 545.0, 630.0, 750.0])
-
-SPEC3_wavelengths = tensor([345.0, 440.0, 545.0, 630.0, 750.0])
-XYZ_to_SPEC3_matrix = tensor([[ 3.709835800692e-05, -5.045488476753e-03,  1.737819425762e-02],
-        [-9.234462049790e-05,  1.255711633712e-02, -6.248979363590e-03],
-        [ 5.760641768575e-03,  9.054936235771e-04, -3.525413107127e-03]])
-SPEC3_to_XYZ_matrix = tensor([[3.586006927490e+01, 1.905437111855e+00, 1.733913726807e+02],
-        [3.373605346680e+01, 9.309941864014e+01, 1.275149226189e+00],
-        [6.726155853271e+01, 2.702589988708e+01, 6.996557931416e-05]])
-
-SPEC3_to_RGB_matrix = torch.matmul(SPEC3_to_XYZ_matrix, XYZ_to_RGB_right_matrix)
-RGB_to_SPEC3_matrix = torch.matmul(RGB_to_XYZ_right_matrix, XYZ_to_SPEC3_matrix)
-
 
 #
 # Primary color space conversion functions
@@ -133,7 +120,7 @@ def batched_RGB_to_SPEC3(rgb: Tensor, clip: bool = True) -> Tensor:
     Returns:
         A tensor of SPEC3 values shaped as (batch_size, 4).
     """
-    spec3 = torch.matmul(rgb, RGB_to_SPEC3_matrix)
+    spec3 = torch.matmul(rgb, RGB_to_SPEC3_right_matrix)
     if clip:
         spec3 = torch.nn.functional.relu(spec3)
     return spec3
@@ -174,6 +161,37 @@ def xyz_color_matching(wavelength: Tensor) -> Tensor:
     
     return torch.stack([x, y, z], dim=1)
 
+def get_optimal_SPEC3_to_XYZ_right_matrix(wavelengths: Tensor) -> Tensor:
+    # Matching, m, is shaped (num_wavelengths, 3)
+    # dWavelength, dw, is shaped (num_wavelengths-1,)
+    # a = m[1]
+    # b = m[2]
+    # c = m[3]
+    # integral = (0 + a)/2*dw[0] + (a + b)/2*dw[1] + (b + c)/2*dw[2] + (c + 0)/2*dw[3]
+    # integral = a*(dw[0] + dw[1])/2 + b*(dw[1] + dw[2])/2 + c*(dw[2] + dw[3])/2
+    # mean_dw[i] = (dw[i] + dw[i+1])/2
+    m = xyz_color_matching(wavelengths)
+    dw = wavelengths[1:] - wavelengths[:-1]
+    mean_dw = (dw[:-1] + dw[1:])/2
+    a = m[1, :]
+    b = m[2, :]
+    c = m[3, :]
+    matrix = torch.stack([
+        a*mean_dw[0],
+        b*mean_dw[1],
+        c*mean_dw[2],
+    ], dim=1).T
+    return matrix
+
+SPEC3_standard_wavelengths = tensor([348.0, 438.0, 542.0, 644.0, 760.0])
+
+SPEC3_scale = 100.0
+
+SPEC3_to_XYZ_right_matrix = get_optimal_SPEC3_to_XYZ_right_matrix(SPEC3_standard_wavelengths) / SPEC3_scale
+XYZ_to_SPEC3_right_matrix = torch.inverse(SPEC3_to_XYZ_right_matrix)
+
+SPEC3_to_RGB_right_matrix = torch.matmul(SPEC3_to_XYZ_right_matrix, XYZ_to_RGB_right_matrix)
+RGB_to_SPEC3_right_matrix = torch.matmul(RGB_to_XYZ_right_matrix, XYZ_to_SPEC3_right_matrix)
 
 def batched_spectrum_to_XYZ(spectral_radiance: Tensor, wavelengths: Tensor) -> Tensor:
     """Converts spectral radiance to CIE XYZ.
@@ -202,7 +220,7 @@ def batched_SPEC3_to_XYZ(spec3: Tensor) -> Tensor:
     Returns:
         A tensor of CIE XYZ values shaped as (batch_size, 3).
     """
-    return torch.matmul(spec3, SPEC3_to_XYZ_matrix)
+    return torch.matmul(spec3, SPEC3_to_XYZ_right_matrix)
 
 #
 # Composite (mult-step) conversions
@@ -253,7 +271,7 @@ def batched_SPEC3_to_RGB(spec3: Tensor) -> Tensor:
     Returns:
         A tensor of linear RGB values shaped as (batch_size, 3).
     """
-    return torch.matmul(spec3, SPEC3_to_RGB_matrix)
+    return torch.matmul(spec3, SPEC3_to_RGB_right_matrix)
 
 def batched_SPEC3_to_sRGB(spec3):
     """Converts SPEC3 to sRGB in the range [0, 1].
@@ -276,7 +294,7 @@ def batched_XYZ_to_SPEC3(xyz, clip: bool = True):
     Returns:
         A tensor of SPEC3 values shaped as (batch_size, 4).
     """
-    spec3 = torch.matmul(xyz, XYZ_to_SPEC3_matrix)
+    spec3 = torch.matmul(xyz, XYZ_to_SPEC3_right_matrix)
     if clip:
         spec3 = torch.nn.functional.relu(spec3)
     return spec3
@@ -425,47 +443,21 @@ def print_vectorized_matrix(matrix, name, in_name):
     print(f"    return {name} * {in_name};")
     print("}")
 
-def test_mat44():
-    XYZ_to_SPEC3_matrix
-
-    xyz = torch.tensor([0.25, 0.5, 0.85])
-
-    XYZ_to_SPEC3_square_matrix = torch.cat([
-        XYZ_to_SPEC3_matrix,
-        torch.ones(1, XYZ_to_SPEC3_matrix.shape[1])], dim=0)
-    xyz4 = torch.cat([xyz, torch.tensor([0.0])])
-    spec34 = XYZ_to_SPEC3_square_matrix.T @ xyz4
-
-    SPEC3_to_XYZ_square_matrix = torch.inverse(XYZ_to_SPEC3_square_matrix.T)
-    SPEC3_to_XYZ_square_matrix @ spec34
-
-    SPEC3_to_XYZ_matrix
-    SPEC3_to_XYZ_square_matrix_p = torch.cat([
-        SPEC3_to_XYZ_matrix,
-        torch.ones(SPEC3_to_XYZ_matrix.shape[0], 1)], dim=1)
-
-    XYZ_to_SPEC3_matrix
-    XYZ_to_SPEC3_square_matrix_p = torch.inverse(SPEC3_to_XYZ_square_matrix_p)
-    xyz41 = torch.cat([xyz, torch.tensor([0.0])])
-    xyz41 @ XYZ_to_SPEC3_square_matrix_p
-    xyz4 @ XYZ_to_SPEC3_square_matrix_p
-    xyz @ XYZ_to_SPEC3_matrix
-
 def print_matrices():
     print("```python")
-    print_matrix(XYZ_to_SPEC3_matrix, "xyz_to_spec3", ["x", "y", "z"], ["sx", "sy", "sz", "sw"])
-    print_matrix(SPEC3_to_XYZ_matrix, "spec3_to_xyz", ["sx", "sy", "sz", "sw"], ["x", "y", "z"])
+    print_matrix(XYZ_to_SPEC3_right_matrix, "xyz_to_spec3", ["x", "y", "z"], ["sx", "sy", "sz", "sw"])
+    print_matrix(SPEC3_to_XYZ_right_matrix, "spec3_to_xyz", ["sx", "sy", "sz", "sw"], ["x", "y", "z"])
     print()
-    print_matrix(RGB_to_SPEC3_matrix, "rgb_to_spec3", ["r", "g", "b"], ["sx", "sy", "sz", "sw"])
-    print_matrix(SPEC3_to_RGB_matrix, "spec3_to_rgb", ["sx", "sy", "sz", "sw"], ["r", "g", "b"])
+    print_matrix(RGB_to_SPEC3_right_matrix, "rgb_to_spec3", ["r", "g", "b"], ["sx", "sy", "sz", "sw"])
+    print_matrix(SPEC3_to_RGB_right_matrix, "spec3_to_rgb", ["sx", "sy", "sz", "sw"], ["r", "g", "b"])
     print("```")
     print()
     print("```javascript")
-    print_vectorized_matrix(XYZ_to_SPEC3_matrix, "xyz_to_spec3", "xyz")
-    print_vectorized_matrix(SPEC3_to_XYZ_matrix, "spec3_to_xyz", "spec3")
+    print_vectorized_matrix(XYZ_to_SPEC3_right_matrix, "xyz_to_spec3", "xyz")
+    print_vectorized_matrix(SPEC3_to_XYZ_right_matrix, "spec3_to_xyz", "spec3")
     print()
-    print_vectorized_matrix(RGB_to_SPEC3_matrix, "rgb_to_spec3", "rgb")
-    print_vectorized_matrix(SPEC3_to_RGB_matrix, "spec3_to_rgb", "spec3")
+    print_vectorized_matrix(RGB_to_SPEC3_right_matrix, "rgb_to_spec3", "rgb")
+    print_vectorized_matrix(SPEC3_to_RGB_right_matrix, "spec3_to_rgb", "spec3")
     print("```")
 
 if __name__ == "__main__":

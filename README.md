@@ -4,23 +4,25 @@ SPEC3 is a new color space that represents colors using a light spectrum compact
 
 The three values are combined with two bounding points to form a 5-point spectrum:
 
-* *ɑ* at 345 nm (implicitly always = 0)
-* **SX** at 440 nm
-* **SY** at 545 nm
-* **SZ** at 630 nm
-* *ω* at 750 nm (implicitly always = 0)
+* *ɑ* at 348 nm (implicitly always = 0)
+* **SX** at 438 nm
+* **SY** at 542 nm
+* **SZ** at 644 nm
+* *ω* at 760 nm (implicitly always = 0)
 
 Individual radiances can be computed at any wavelength 
-(within the bounds of 345nm to 750nm)
-using linear interpolation. This means that the color space can represent any color in the visible spectrum along with
-any UV and IR "colors" in a 405nm window by simply tracking a wavelength offset.
+(within the bounds of 348nm to 760nm)
+using linear interpolation. This means that the color space can represent any color in the visible spectrum
+along with any UV and IR "colors" in a 412nm window by tracking a wavelength offset.
 
-Because teh color space of SPEC3 directly measure energy,
-addition of colors is simple addition. Because the energies
+The wavelength selection was chosen to provide a balance between information loss producing spectra with only positive values.
+
+Because the color space of SPEC3 directly measures energy,
+addition of colors is simple vector addition. Because the energies
 never need to be clipped, the color space is suitable for
 high dynamic range rendering.
 
-The color space is designed to be linearly convertible from CIE XYZ and RGB color spaces with minimal loss of information. Conversion is a simple linear transform so it's fast to convert to and from SPEC3.
+The color space is designed to be linearly convertible from CIE XYZ and linear RGB color spaces with a minimal loss of information. Conversion is a simple linear transform so it's fast to convert to and from SPEC3.
 
 ## Conversion Functions
 

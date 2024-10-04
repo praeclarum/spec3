@@ -224,28 +224,6 @@ class XYZWavelengthFitting:
         max_spectrum_width_error = torch.relu(spectrum_width - max_spectrum_width)
         squared_error = positive_constraint_error**2 + max_spectrum_width_error**2
         return squared_error.mean()
-    def get_SPEC3_to_XYZ_matrix(self, wavelengths: Tensor) -> Tensor:
-        # Matching, m, is shaped (num_wavelengths, 3)
-        m = conversions.xyz_color_matching(wavelengths)
-        # dWavelength, dw, is shaped (num_wavelengths-1,)
-        dw = wavelengths[1:] - wavelengths[:-1]
-        # a = m[1]
-        # b = m[2]
-        # c = m[3]
-        # d = m[4]
-        # integral = (0 + a)/2*dw[0] + (a + b)/2*dw[1] + (b + c)/2*dw[2] + (c + d)/2*dw[3] + (d + 0)/2*dw[4]
-        # integral = a*(dw[0] + dw[1])/2 + b*(dw[1] + dw[2])/2 + c*(dw[2] + dw[3])/2 + d*(dw[3] + dw[4])/2
-        # mean_dw[i] = (dw[i] + dw[i+1])/2
-        mean_dw = (dw[:-1] + dw[1:])/2
-        a = m[1, :]
-        b = m[2, :]
-        c = m[3, :]
-        matrix = torch.stack([
-            a*mean_dw[0],
-            b*mean_dw[1],
-            c*mean_dw[2],
-        ], dim=1).T
-        return matrix
     def get_XYZ_to_SPEC3_matrix(self, SPEC3_to_XYZ_matrix: Tensor) -> Tensor:
         return torch.inverse(SPEC3_to_XYZ_matrix)
     def fit(self, num_steps: int = 10_000, batch_size=8*1024, wavelengths_learning_rate: float = 0.001):
@@ -259,7 +237,7 @@ class XYZWavelengthFitting:
             with torch.no_grad():
                 inputs, extra = self.get_train_inputs(batch_size)
             wavelengths = self.wavelengths_model.get_wavelengths()
-            SPEC3_to_XYZ_matrix = self.get_SPEC3_to_XYZ_matrix(wavelengths)
+            SPEC3_to_XYZ_matrix = conversions.get_optimal_SPEC3_to_XYZ_right_matrix(wavelengths)
             XYZ_to_SPEC3_matrix = self.get_XYZ_to_SPEC3_matrix(SPEC3_to_XYZ_matrix)
             unclipped_spec3s = torch.matmul(inputs, XYZ_to_SPEC3_matrix)
             clipped_spec3s = torch.nn.functional.relu(unclipped_spec3s)
@@ -284,13 +262,15 @@ if __name__ == '__main__':
     wfitting.fit(num_steps=0)
     wfitting.wavelengths_model.eval()
     with torch.no_grad():
-        torch.set_printoptions(precision=12)
+        torch.set_printoptions(precision=15, sci_mode=False)
         wavelengths = wfitting.wavelengths_model.get_wavelengths().detach().clone()
         SPEC3_to_XYZ_matrix = wfitting.get_SPEC3_to_XYZ_matrix(wavelengths)
         XYZ_to_SPEC3_matrix = wfitting.get_XYZ_to_SPEC3_matrix(SPEC3_to_XYZ_matrix)
+        print()
         print(f"SPEC3_wavelengths = {repr(wavelengths)}")
-        print(f"XYZ_to_SPEC3_matrix = {repr(XYZ_to_SPEC3_matrix)}")
-        print(f"SPEC3_to_XYZ_matrix = {repr(SPEC3_to_XYZ_matrix)}")
+        # print(f"XYZ_to_SPEC3_right_matrix = {repr(XYZ_to_SPEC3_matrix)}")
+        print()
+        print(f"SPEC3_to_XYZ_right_matrix = {repr(SPEC3_to_XYZ_matrix)}")
     
     fittings = [
         # RGBtoSPEC3Fitting(),
