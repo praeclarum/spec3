@@ -432,6 +432,30 @@ def print_vectorized_matrix(matrix, name, in_name):
     print(f"    return {name} * {in_name};")
     print("}")
 
+def test_mat44():
+    XYZ_to_SPEC4_matrix
+
+    xyz = torch.tensor([0.25, 0.5, 0.85])
+
+    XYZ_to_SPEC4_square_matrix = torch.cat([
+        XYZ_to_SPEC4_matrix,
+        torch.ones(1, XYZ_to_SPEC4_matrix.shape[1])], dim=0)
+    xyz4 = torch.cat([xyz, torch.tensor([0.0])])
+    spec44 = XYZ_to_SPEC4_square_matrix.T @ xyz4
+
+    SPEC4_to_XYZ_square_matrix = torch.inverse(XYZ_to_SPEC4_square_matrix.T)
+    SPEC4_to_XYZ_square_matrix @ spec44
+
+    SPEC4_to_XYZ_matrix
+    SPEC4_to_XYZ_square_matrix_p = torch.cat([
+        SPEC4_to_XYZ_matrix,
+        torch.ones(SPEC4_to_XYZ_matrix.shape[0], 1)], dim=1)
+
+    XYZ_to_SPEC4_matrix
+    XYZ_to_SPEC4_square_matrix_p = torch.inverse(SPEC4_to_XYZ_square_matrix_p)
+    xyz4 @ XYZ_to_SPEC4_square_matrix_p
+    xyz @ XYZ_to_SPEC4_matrix
+
 def print_matrices():
     print("```python")
     print_matrix(XYZ_to_SPEC4_matrix, "xyz_to_spec4", ["x", "y", "z"], ["sx", "sy", "sz", "sw"])
