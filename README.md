@@ -1,12 +1,13 @@
 # SPEC3 Color Space
 
-SPEC3 is a new color space that represents colors using a light spectrum compactly represented as 3 values (SX, SY, and SZ) that specifies 3 spectral radiances at the wavelengths 440, 545, and 630nm.
+SPEC3 is a new color space that represents colors using a light spectrum compactly represented as 3 values (SX, SY, and SZ) that specify 3 spectral radiances at the wavelengths 440, 545, and 630nm.
 
-In a nutshell, it converts a perceptual color to the physically real spectrum
-that caused that perception. This is useful for rendering realistic lighting
-while still being able to convert between perceptual colors and physical light energies.
+It converts perceptual colors to the physically real spectra
+that caused their perception. These physically real spectra
+are useful for rendering realistic lighting
+while still being able to convert between perceptual colors easily.
 
-The three values are combined with two bounding points to form a 5-point spectrum:
+The three SPEC3 values (SX, SY, SZ) are combined with two bounding points to form a 5-point spectrum:
 
 * *ɑ* at 348 nm (implicitly always = 0)
 * **SX** at 438 nm
@@ -16,12 +17,11 @@ The three values are combined with two bounding points to form a 5-point spectru
 
 Individual radiances can be computed at any wavelength 
 (within the bounds of 348nm to 760nm)
-using linear interpolation. This means that the color space can represent any color in the visible spectrum
-along with any UV and IR "colors" in a 0-bounded 412nm window by tracking a wavelength offset.
+using linear interpolation. This means that the color space can represent any color in the visible spectrum.
+It can also represent UV and IR 0-bounded 412nm-wide spectra by tracking a wavelength offset.
 
 The wavelengths were chosen as a balance between information loss
-and avoiding spectra with negative values. Negative values are
-physically unreal and can be safely clipped away.
+and avoiding negative spectra when converting from RGB and XYZ color spaces. (Negative values in SPEC3 are physically unreal and can be safely clipped away.)
 
 Because the color space of SPEC3 directly measures energy,
 addition of colors is simple vector addition. Because the energies
