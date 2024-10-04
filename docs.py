@@ -3,6 +3,7 @@ import os
 import sys
 import re
 from matplotlib import pyplot as plt
+from PIL import Image
 import torch
 
 import conversions
@@ -91,7 +92,11 @@ def write_color_table():
     with open(os.path.join(out_dir, "color_table.md"), "w") as out:
         def write_color(srgb):
             srgb_str = srgb_to_str(srgb)
-            out.write(f"<span style='background-color: {srgb_str}; width: 64px; height: 24px; display: inline-block'></span>")
+            srgb_id = srgb_str[1:]
+            color_name = f"color_{srgb_id}.png"
+            out.write(f"<img src='./images/{color_name}' width='80px'>")
+            plt.figure(figsize=(2, 1), facecolor=srgb_str)
+            plt.savefig(os.path.join(images_dir, color_name))
         out.write("# Color Table\n")
         out.write("| Color | sRGB | SPEC3 | Spectrum |\n")
         out.write("| --- | --- | --- | --- |\n")
@@ -109,14 +114,11 @@ def write_color_table():
             spectrum = torch.nn.functional.pad(spec3, (1, 1), value=0.0)
             plot_x = conversions.SPEC3_standard_wavelengths.numpy()
             plt.figure(figsize=(4, 2), facecolor="black")
-            # Background to black, text to white
             plt.gca().set_facecolor("black")
             plt.gca().tick_params(axis='x', colors='white')
             plt.gca().tick_params(axis='y', colors='black')
             plt.gca().yaxis.label.set_color('black')
             plt.gca().xaxis.label.set_color('white')
-            plt.gca().title.set_color('white')
-            # Set border color
             plt.gca().spines['bottom'].set_color('white')
             plt.fill_between(
                 x=plot_x,
@@ -131,7 +133,7 @@ def write_color_table():
             spectrum_name = f"spectrum_{srgb_id}.png"
             plt.savefig(os.path.join(images_dir, spectrum_name))
             plt.close()
-            out.write(f"<img src='./images/{spectrum_name}' width='200px'> |\n")
+            out.write(f"<img src='./images/{spectrum_name}' width='240px'> |\n")
 
 if __name__ == "__main__":
     print_matrices()

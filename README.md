@@ -35,13 +35,13 @@ The color space is designed to be linearly convertible from CIE XYZ and linear R
 
 | Color | sRGB | SPEC3 | Spectrum |
 | --- | --- | --- | --- |
-| <span style='background-color: #ff0000; width: 64px; height: 24px; display: inline-block'></span> | #ff0000 |  (0.000, 0.000, 1.190) | <img src='./images/spectrum_ff0000.png' width='200px'> |
-| <span style='background-color: #00ff00; width: 64px; height: 24px; display: inline-block'></span> | #00ff00 |  (0.000, 0.795, 0.136) | <img src='./images/spectrum_00ff00.png' width='200px'> |
-| <span style='background-color: #0000ff; width: 64px; height: 24px; display: inline-block'></span> | #0000ff |  (0.598, 0.002, 0.000) | <img src='./images/spectrum_0000ff.png' width='200px'> |
-| <span style='background-color: #ff00ff; width: 64px; height: 24px; display: inline-block'></span> | #ff00ff |  (0.598, 0.000, 1.180) | <img src='./images/spectrum_ff00ff.png' width='200px'> |
-| <span style='background-color: #ffffff; width: 64px; height: 24px; display: inline-block'></span> | #ffffff |  (0.595, 0.784, 1.316) | <img src='./images/spectrum_ffffff.png' width='200px'> |
-| <span style='background-color: #808080; width: 64px; height: 24px; display: inline-block'></span> | #808080 |  (0.127, 0.168, 0.282) | <img src='./images/spectrum_808080.png' width='200px'> |
-| <span style='background-color: #000000; width: 64px; height: 24px; display: inline-block'></span> | #000000 |  (0.000, 0.000, 0.000) | <img src='./images/spectrum_000000.png' width='200px'> |
+| <img src='./images/color_ff0000.png' width='80px'> | #ff0000 |  (0.000, 0.000, 1.190) | <img src='./images/spectrum_ff0000.png' width='240px'> |
+| <img src='./images/color_00ff00.png' width='80px'> | #00ff00 |  (0.000, 0.795, 0.136) | <img src='./images/spectrum_00ff00.png' width='240px'> |
+| <img src='./images/color_0000ff.png' width='80px'> | #0000ff |  (0.598, 0.002, 0.000) | <img src='./images/spectrum_0000ff.png' width='240px'> |
+| <img src='./images/color_ff00ff.png' width='80px'> | #ff00ff |  (0.598, 0.000, 1.180) | <img src='./images/spectrum_ff00ff.png' width='240px'> |
+| <img src='./images/color_ffffff.png' width='80px'> | #ffffff |  (0.595, 0.784, 1.316) | <img src='./images/spectrum_ffffff.png' width='240px'> |
+| <img src='./images/color_808080.png' width='80px'> | #808080 |  (0.127, 0.168, 0.282) | <img src='./images/spectrum_808080.png' width='240px'> |
+| <img src='./images/color_000000.png' width='80px'> | #000000 |  (0.000, 0.000, 0.000) | <img src='./images/spectrum_000000.png' width='240px'> |
 
 ## Conversion Functions
 
