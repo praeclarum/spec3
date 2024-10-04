@@ -66,5 +66,73 @@ def print_matrices():
     print_vectorized_matrix(conversions.SPEC3_to_RGB_right_matrix, "spec3_to_rgb", "spec3")
     print("```")
 
+def write_color_table():
+    # For each example color we show:
+    # 1. The HTML color with the sRGB values
+    # 2. The SPEC3 remapped color with SPEC3 values
+    # 3. The SPEC3 spectrum (from pyplot)
+    srgbs = torch.tensor([
+        [1.0, 0.0, 0.0],
+        [0.0, 1.0, 0.0],
+        [0.0, 0.0, 1.0],
+        [1.0, 0.0, 1.0],
+        [1.0, 1.0, 1.0],
+        [0.5, 0.5, 0.5],
+        [0.0, 0.0, 0.0],
+    ])
+    spec3s = conversions.batched_sRGB_to_SPEC3(srgbs)
+    roundtrip_srgbs = conversions.batched_SPEC3_to_sRGB(spec3s)
+    out_dir = os.path.dirname(os.path.abspath(__file__))
+    images_dir = os.path.join(out_dir, "images")
+    os.makedirs(images_dir, exist_ok=True)
+    def srgb_to_str(srgb: torch.Tensor) -> str:
+        isrgb = (srgb * 255).round().int()
+        return f"#{isrgb[0]:02x}{isrgb[1]:02x}{isrgb[2]:02x}"
+    with open(os.path.join(out_dir, "color_table.md"), "w") as out:
+        def write_color(srgb):
+            srgb_str = srgb_to_str(srgb)
+            out.write(f"<span style='background-color: {srgb_str}; width: 64px; height: 24px; display: inline-block'></span>")
+        out.write("# Color Table\n")
+        out.write("| Color | sRGB | SPEC3 | Spectrum |\n")
+        out.write("| --- | --- | --- | --- |\n")
+        for i in range(srgbs.shape[0]):
+            srgb = srgbs[i, :]
+            srgb_str = srgb_to_str(srgb)
+            srgb_id = srgb_str[1:]
+            roundtrip_srgb = roundtrip_srgbs[i, :]
+            roundtrip_srgb_str = srgb_to_str(roundtrip_srgb)
+            spec3 = spec3s[i, :]
+            spec3_str = f"({spec3[0]:.3f}, {spec3[1]:.3f}, {spec3[2]:.3f})"
+            out.write(f"| ")
+            write_color(srgb)
+            out.write(f" | {srgb_str} |  {spec3_str} | ")
+            spectrum = torch.nn.functional.pad(spec3, (1, 1), value=0.0)
+            plot_x = conversions.SPEC3_standard_wavelengths.numpy()
+            plt.figure(figsize=(4, 2), facecolor="black")
+            # Background to black, text to white
+            plt.gca().set_facecolor("black")
+            plt.gca().tick_params(axis='x', colors='white')
+            plt.gca().tick_params(axis='y', colors='black')
+            plt.gca().yaxis.label.set_color('black')
+            plt.gca().xaxis.label.set_color('white')
+            plt.gca().title.set_color('white')
+            # Set border color
+            plt.gca().spines['bottom'].set_color('white')
+            plt.fill_between(
+                x=plot_x,
+                y1=0.0, 
+                y2=spectrum.numpy(), 
+                where= None,
+                interpolate= True,
+                color= roundtrip_srgb_str,
+                alpha= 0.5)
+            plt.plot(plot_x, spectrum.numpy(), color=roundtrip_srgb_str)
+            plt.ylim(0.0, 1.35)
+            spectrum_name = f"spectrum_{srgb_id}.png"
+            plt.savefig(os.path.join(images_dir, spectrum_name))
+            plt.close()
+            out.write(f"<img src='./images/{spectrum_name}' width='200px'> |\n")
+
 if __name__ == "__main__":
     print_matrices()
+    write_color_table()

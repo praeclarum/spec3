@@ -2,6 +2,10 @@
 
 SPEC3 is a new color space that represents colors using a light spectrum compactly represented as 3 values (SX, SY, and SZ) that specifies 3 spectral radiances at the wavelengths 440, 545, and 630nm.
 
+In a nutshell, it converts a perceptual color to the physically real spectrum
+that caused that perception. This is useful for rendering realistic lighting
+while still being able to convert between perceptual colors and physical light energies.
+
 The three values are combined with two bounding points to form a 5-point spectrum:
 
 * *ɑ* at 348 nm (implicitly always = 0)
@@ -26,6 +30,18 @@ high dynamic range rendering. Conversion back to XYZ will provide an
 HDR color that can be toned mapped to a display.
 
 The color space is designed to be linearly convertible from CIE XYZ and linear RGB color spaces with a minimal loss of information. Conversion is a simple linear transform so it's fast to convert to and from SPEC3.
+
+## Example Color Values and Spectra
+
+| Color | sRGB | SPEC3 | Spectrum |
+| --- | --- | --- | --- |
+| <span style='background-color: #ff0000; width: 64px; height: 24px; display: inline-block'></span> | #ff0000 |  (0.000, 0.000, 1.190) | <img src='./images/spectrum_ff0000.png' width='200px'> |
+| <span style='background-color: #00ff00; width: 64px; height: 24px; display: inline-block'></span> | #00ff00 |  (0.000, 0.795, 0.136) | <img src='./images/spectrum_00ff00.png' width='200px'> |
+| <span style='background-color: #0000ff; width: 64px; height: 24px; display: inline-block'></span> | #0000ff |  (0.598, 0.002, 0.000) | <img src='./images/spectrum_0000ff.png' width='200px'> |
+| <span style='background-color: #ff00ff; width: 64px; height: 24px; display: inline-block'></span> | #ff00ff |  (0.598, 0.000, 1.180) | <img src='./images/spectrum_ff00ff.png' width='200px'> |
+| <span style='background-color: #ffffff; width: 64px; height: 24px; display: inline-block'></span> | #ffffff |  (0.595, 0.784, 1.316) | <img src='./images/spectrum_ffffff.png' width='200px'> |
+| <span style='background-color: #808080; width: 64px; height: 24px; display: inline-block'></span> | #808080 |  (0.127, 0.168, 0.282) | <img src='./images/spectrum_808080.png' width='200px'> |
+| <span style='background-color: #000000; width: 64px; height: 24px; display: inline-block'></span> | #000000 |  (0.000, 0.000, 0.000) | <img src='./images/spectrum_000000.png' width='200px'> |
 
 ## Conversion Functions
 
