@@ -202,6 +202,7 @@ class XYZWavelengthFitting:
     def __init__(self, wavelengths_model_type: str = 'positive'):
         self.name = 'XYZ Wavelengths'
         self.model_type = wavelengths_model_type
+        self.lambda_closs = 1.0
         if wavelengths_model_type == 'standard':
             self.wavelengths_model = StandardWavelengthsModel()
         elif wavelengths_model_type == 'positive':
@@ -215,10 +216,13 @@ class XYZWavelengthFitting:
     def get_reconstruction_loss(self, inputs: Tensor, outputs: Tensor, extra: Optional[Tensor]) -> Tensor:
         """Penalizes not being able to reconstruct the input."""
         return nn.functional.mse_loss(inputs, outputs)
-    def get_constraint_loss(self, spec4: Tensor, extra: Optional[Tensor]) -> Tensor:
+    def get_constraint_loss(self, spec4: Tensor, wavelengths: Tensor, extra: Optional[Tensor]) -> Tensor:
         """Penalizes not satisfying constraints: e.g., non-negativity."""
         positive_constraint_error = torch.relu(-spec4)
-        squared_error = positive_constraint_error**2
+        spectrum_width = wavelengths[-1] - wavelengths[0]
+        max_spectrum_width = 500.0
+        max_spectrum_width_error = torch.relu(spectrum_width - max_spectrum_width)
+        squared_error = positive_constraint_error**2 + max_spectrum_width_error**2
         return squared_error.mean()
     def get_SPEC4_to_XYZ_matrix(self, wavelengths: Tensor) -> Tensor:
         # Matching, m, is shaped (num_wavelengths, 3)
@@ -268,7 +272,7 @@ class XYZWavelengthFitting:
             clipped_spec4s = torch.nn.functional.relu(unclipped_spec4s)
             rec_xyzs = torch.matmul(clipped_spec4s, SPEC4_to_XYZ_matrix)
             rloss = self.get_reconstruction_loss(inputs, rec_xyzs, extra)
-            closs = 100.0 * self.get_constraint_loss(unclipped_spec4s, extra)
+            closs = self.lambda_closs * self.get_constraint_loss(unclipped_spec4s, wavelengths, extra)
             loss = rloss + closs
             optimizer.zero_grad()
             loss.backward()
