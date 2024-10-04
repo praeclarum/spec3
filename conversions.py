@@ -8,29 +8,33 @@ from torch import Tensor, tensor
 # Color Space Conversion Matrices
 #
 
-RGB_to_XYZ_matrix = torch.tensor([
-    [0.4124564, 0.3575761, 0.1804375],
-    [0.2126729, 0.7151522, 0.0721750],
-    [0.0193339, 0.1191920, 0.9503041]
+RGB_to_XYZ_left_matrix = torch.tensor([
+    [0.49000, 0.31000, 0.20000],
+    [0.17697, 0.81240, 0.01063],
+    [0.00000, 0.01000, 0.99000],
 ])
+RGB_to_XYZ_right_matrix = RGB_to_XYZ_left_matrix.T
 
-XYZ_to_RGB_matrix = torch.inverse(RGB_to_XYZ_matrix)
+XYZ_to_RGB_left_matrix = torch.inverse(RGB_to_XYZ_left_matrix)
+XYZ_to_RGB_right_matrix = torch.inverse(RGB_to_XYZ_right_matrix)
 
 SPEC4_standard_wavelengths = tensor([400.0, 460.0, 520.0, 580.0, 640.0, 700.0])
 
-SPEC4_wavelengths = tensor([285.292755126953, 481.748840332031, 523.580627441406, 624.138977050781,
-        747.731079101562, 783.481262207031])
-XYZ_to_SPEC4_matrix = tensor([[ 0.000444978010, -0.008158014156,  0.012110751122, -0.004397713579],
-        [-0.001059244853,  0.019418653101, -0.001432489371, -0.016926920041],
-        [ 0.011565578170, -0.003001584671, -0.001133141108, -0.007430853322]])
-SPEC4_to_XYZ_matrix = tensor([[1.032352352142e+01, 1.789717292786e+01, 8.770509338379e+01],
-        [6.973690509796e+00, 5.516946792603e+01, 4.784133434296e+00],
-        [8.688989257812e+01, 3.650690078735e+01, 1.809565001167e-04],
-        [9.274429176003e-04, 3.750943811610e-03, 6.066312325381e-15]])
+SPEC4_wavelengths = tensor([351.522644042969, 440.371154785156, 546.317138671875, 630.646789550781,
+        798.552429199219, 835.963256835938])
+XYZ_to_SPEC4_matrix = tensor([[ 3.399193883524e-05, -5.034552421421e-03,  1.453711930662e-02,
+         -9.536559693515e-03],
+        [-8.494817302562e-05,  1.257958170027e-02, -5.503239575773e-03,
+         -6.991393864155e-03],
+        [ 5.900643765926e-03,  9.003557497635e-04, -2.944991458207e-03,
+         -3.856008639559e-03]])
+SPEC4_to_XYZ_matrix = tensor([[3.501516723633e+01, 1.896471738815e+00, 1.692986297607e+02],
+        [3.570357894897e+01, 9.370123291016e+01, 1.143284440041e+00],
+        [8.107255554199e+01, 3.244654846191e+01, 7.815709977876e-05],
+        [1.218585481411e-07, 8.563614755985e-06, 1.442840641160e-20]])
 
-SPEC4_to_RGB_matrix = torch.matmul(SPEC4_to_XYZ_matrix, XYZ_to_RGB_matrix)
-
-RGB_to_SPEC4_matrix = torch.matmul(RGB_to_XYZ_matrix, XYZ_to_SPEC4_matrix)
+SPEC4_to_RGB_matrix = torch.matmul(SPEC4_to_XYZ_matrix, XYZ_to_RGB_right_matrix)
+RGB_to_SPEC4_matrix = torch.matmul(RGB_to_XYZ_right_matrix, XYZ_to_SPEC4_matrix)
 
 
 #
@@ -71,7 +75,7 @@ def batched_RGB_to_XYZ(rgb: Tensor) -> Tensor:
     Returns:
         A tensor of CIE XYZ values shaped as (batch_size, 3).
     """
-    return torch.matmul(rgb, RGB_to_XYZ_matrix)
+    return torch.matmul(rgb, RGB_to_XYZ_right_matrix)
 
 def batched_XYZ_to_RGB(xyz: Tensor) -> Tensor:
     """Converts CIE XYZ to linear RGB.
@@ -82,7 +86,7 @@ def batched_XYZ_to_RGB(xyz: Tensor) -> Tensor:
     Returns:
         A tensor of linear RGB values shaped as (batch_size, 3).
     """
-    return torch.matmul(xyz, XYZ_to_RGB_matrix)
+    return torch.matmul(xyz, XYZ_to_RGB_right_matrix)
 
 def tone_map_XYZ(xyz: Tensor) -> Tensor:
     """Tone maps CIE XYZ values using Reinhard's method.
