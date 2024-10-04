@@ -242,7 +242,8 @@ class XYZWavelengthFitting:
 if __name__ == '__main__':
     wfitting = XYZWavelengthFitting()
     print(f"Fitting {wfitting.name}...")
-    wfitting.fit(num_steps=20_000)
+    wfitting.fit(num_steps=200_000)
+    torch.set_printoptions(precision=16)
     print(f"{wfitting.name} wavelengths:")
     wavelengths = wfitting.wavelengths_model.get_wavelengths().detach().clone()
     print(repr(wavelengths))
