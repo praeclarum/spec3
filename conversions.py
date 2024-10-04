@@ -3,8 +3,9 @@
 import torch
 from torch import Tensor
 
+
 #
-# Primary color space conversion functions
+# Color Space Conversion Matrices
 #
 
 RGB_to_XYZ_matrix = torch.tensor([
@@ -14,6 +15,23 @@ RGB_to_XYZ_matrix = torch.tensor([
 ])
 
 XYZ_to_RGB_matrix = torch.inverse(RGB_to_XYZ_matrix)
+
+spec4_wavelengths = torch.tensor([400.0, 460.0, 520.0, 580.0, 640.0, 700.0])
+
+RGB_to_SPEC4_matrix = torch.tensor([[ 1.7350e-03,  1.7194e-05,  9.2140e-03],
+        [ 1.3098e-03,  1.3882e-02,  5.1297e-03],
+        [ 4.8327e-03,  2.1318e-03, -2.1668e-03],
+        [ 4.0426e-03,  1.3245e-03, -1.3198e-03]]).T
+
+XYZ_to_SPEC4_matrix = torch.tensor([[ 0.0010689063929021, -0.0012935890117660,  0.0098241865634918],
+        [-0.0208281930536032,  0.0253394413739443,  0.0024684802629054],
+        [ 0.0152420969679952, -0.0012280920054764, -0.0023993346840143],
+        [ 0.0078805284574628, -0.0006411729846150, -0.0012423484586179]]).T
+
+
+#
+# Primary color space conversion functions
+#
 
 def batched_sRGB_to_RGB(srgb: Tensor) -> Tensor:
     """Converts sRGB to linear RGB using a gamma of 2.4.
@@ -102,18 +120,6 @@ def batched_xyY_to_XYZ(xyY: Tensor) -> Tensor:
     X = x * scale
     Z = (1 - x - y) * scale
     return torch.stack([X, Y, Z], dim=1)
-
-spec4_wavelengths = torch.tensor([400.0, 460.0, 520.0, 580.0, 640.0, 700.0])
-
-RGB_to_SPEC4_matrix = torch.tensor([[ 1.7350e-03,  1.7194e-05,  9.2140e-03],
-        [ 1.3098e-03,  1.3882e-02,  5.1297e-03],
-        [ 4.8327e-03,  2.1318e-03, -2.1668e-03],
-        [ 4.0426e-03,  1.3245e-03, -1.3198e-03]]).T
-
-XYZ_to_SPEC4_matrix = torch.tensor([[ 0.0010689063929021, -0.0012935890117660,  0.0098241865634918],
-        [-0.0208281930536032,  0.0253394413739443,  0.0024684802629054],
-        [ 0.0152420969679952, -0.0012280920054764, -0.0023993346840143],
-        [ 0.0078805284574628, -0.0006411729846150, -0.0012423484586179]]).T
 
 def batched_RGB_to_SPEC4(rgb: Tensor, clip: bool = True) -> Tensor:
     """Converts linear RGB to SPEC4.
