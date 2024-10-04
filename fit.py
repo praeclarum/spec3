@@ -209,13 +209,14 @@ class XYZWavelengthFitting:
             xyz_color_matching[4, :]
         ], dim=1).T
         return matrix
-    def get_XYZ_to_SPEC4_square_matrix(self, wavelengths: Tensor) -> Tensor:
+    def get_XYZ_to_SPEC4_matrix(self, wavelengths: Tensor) -> Tensor:
         SPEC4_to_XYZ_matrix = self.get_SPEC4_to_XYZ_matrix(wavelengths)
         SPEC4_to_XYZ_square_matrix = torch.cat([
             SPEC4_to_XYZ_matrix,
             torch.ones(SPEC4_to_XYZ_matrix.shape[0], 1)], dim=1)
         XYZ_to_SPEC4_square_matrix = torch.inverse(SPEC4_to_XYZ_square_matrix)
-        return XYZ_to_SPEC4_square_matrix
+        XYZ_to_SPEC4_matrix = XYZ_to_SPEC4_square_matrix[:-1, :]
+        return XYZ_to_SPEC4_matrix
     def fit(self, num_steps: int = 10_000, batch_size=4*1024, wavelengths_learning_rate: float = 0.001):
         self.wavelengths_model.train()
         optimizer = torch.optim.Adam(self.wavelengths_model.parameters(), lr=wavelengths_learning_rate)
@@ -226,9 +227,8 @@ class XYZWavelengthFitting:
             with torch.no_grad():
                 inputs, extra = self.get_train_inputs(batch_size)
             wavelengths = self.wavelengths_model.get_wavelengths()
-            XYZ_to_SPEC4_square_matrix = self.get_XYZ_to_SPEC4_square_matrix(wavelengths)
-            padded_inputs = torch.nn.functional.pad(inputs, (0, 1), value=0.0)
-            unclipped_spec4s = torch.matmul(padded_inputs, XYZ_to_SPEC4_square_matrix)
+            XYZ_to_SPEC4_square_matrix = self.get_XYZ_to_SPEC4_matrix(wavelengths)
+            unclipped_spec4s = torch.matmul(inputs, XYZ_to_SPEC4_square_matrix)
             closs = self.get_constraint_loss(unclipped_spec4s, extra)
             loss = closs
             optimizer.zero_grad()
@@ -243,13 +243,15 @@ if __name__ == '__main__':
     wfitting = XYZWavelengthFitting()
     print(f"Fitting {wfitting.name}...")
     wfitting.fit(num_steps=200_000)
-    torch.set_printoptions(precision=16)
-    print(f"{wfitting.name} wavelengths:")
-    wavelengths = wfitting.wavelengths_model.get_wavelengths().detach().clone()
-    print(repr(wavelengths))
-    XYZ_to_SPEC4_square_matrix = wfitting.get_XYZ_to_SPEC4_square_matrix(wavelengths)
-    print(f"XYZ to SPEC4 square matrix:")
-    print(repr(XYZ_to_SPEC4_square_matrix))
+    wfitting.wavelengths_model.eval()
+    with torch.no_grad():
+        torch.set_printoptions(precision=12)
+        wavelengths = wfitting.wavelengths_model.get_wavelengths().detach().clone()
+        print(f"SPEC4_wavelengths = {repr(wavelengths)}")
+        XYZ_to_SPEC4_matrix = wfitting.get_XYZ_to_SPEC4_matrix(wavelengths)
+        print("XYZ_to_SPEC4_matrix =", repr(XYZ_to_SPEC4_matrix))
+        SPEC4_to_XYZ_matrix = wfitting.get_SPEC4_to_XYZ_matrix(wavelengths)
+        print(f"SPEC4_to_XYZ_matrix = {repr(SPEC4_to_XYZ_matrix)}")
     
     fittings = [
         # RGBtoSPEC4Fitting(),
