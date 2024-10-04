@@ -199,14 +199,27 @@ class XYZWavelengthFitting:
         squared_error = positive_constraint_error**2
         return squared_error.mean()
     def get_SPEC4_to_XYZ_matrix(self, wavelengths: Tensor) -> Tensor:
-        xyz_color_matching = conversions.xyz_color_matching(wavelengths)
-        dwavelength = wavelengths[1:] - wavelengths[:-1]
-        dwavelength_mean = torch.mean(dwavelength)
-        matrix = dwavelength_mean * torch.stack([
-            xyz_color_matching[1, :],
-            xyz_color_matching[2, :],
-            xyz_color_matching[3, :],
-            xyz_color_matching[4, :]
+        # Matching, m, is shaped (num_wavelengths, 3)
+        m = conversions.xyz_color_matching(wavelengths)
+        # dWavelength, dw, is shaped (num_wavelengths-1,)
+        dw = wavelengths[1:] - wavelengths[:-1]
+        # a = m[1]
+        # b = m[2]
+        # c = m[3]
+        # d = m[4]
+        # integral = (0 + a)/2*dw[0] + (a + b)/2*dw[1] + (b + c)/2*dw[2] + (c + d)/2*dw[3] + (d + 0)/2*dw[4]
+        # integral = a*(dw[0] + dw[1])/2 + b*(dw[1] + dw[2])/2 + c*(dw[2] + dw[3])/2 + d*(dw[3] + dw[4])/2
+        # mean_dw[i] = (dw[i] + dw[i+1])/2
+        mean_dw = (dw[:-1] + dw[1:])/2
+        a = m[1, :]
+        b = m[2, :]
+        c = m[3, :]
+        d = m[4, :]
+        matrix = torch.stack([
+            a*mean_dw[0],
+            b*mean_dw[1],
+            c*mean_dw[2],
+            d*mean_dw[3]
         ], dim=1).T
         return matrix
     def get_XYZ_to_SPEC4_matrix(self, wavelengths: Tensor) -> Tensor:
