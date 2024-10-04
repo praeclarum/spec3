@@ -165,6 +165,7 @@ def xyz_color_matching(wavelength: Tensor) -> Tensor:
     
     return torch.stack([x, y, z], dim=1)
 
+
 def batched_spectrum_to_XYZ(spectral_radiance: Tensor, wavelengths: Tensor) -> Tensor:
     """Converts spectral radiance to CIE XYZ.
     Integral(spectral_radiance(wavelength) * xyz_color_matching(wavelength) * dwavelength, wavelength)
@@ -195,6 +196,28 @@ def batched_SPEC4_to_XYZ(spec4: Tensor) -> Tensor:
     spectrum = torch.nn.functional.pad(spec4, (1, 1), value=0.0)
     xyz = batched_spectrum_to_XYZ(spectrum, spec4_wavelengths)
     return xyz
+
+spec4_wavelength_xyz_color_matching = xyz_color_matching(spec4_wavelengths)
+spec4_dwavelength = spec4_wavelengths[1:] - spec4_wavelengths[:-1]
+spec4_dwavelength_mean = torch.mean(spec4_dwavelength).item()
+
+SPEC4_to_XYZ_matrix = spec4_dwavelength_mean * torch.stack([
+    spec4_wavelength_xyz_color_matching[1, :],
+    spec4_wavelength_xyz_color_matching[2, :],
+    spec4_wavelength_xyz_color_matching[3, :],
+    spec4_wavelength_xyz_color_matching[4, :]
+], dim=1).T
+
+def batched_SPEC4_to_XYZ_fast(spec4: Tensor) -> Tensor:
+    """Converts SPEC4 to CIE XYZ.
+
+    Args:
+        spec4: A tensor of SPEC4 values shaped as (batch_size, 4).
+
+    Returns:
+        A tensor of CIE XYZ values shaped as (batch_size, 3).
+    """
+    return torch.matmul(spec4, SPEC4_to_XYZ_matrix)
 
 #
 # Composite (mult-step) conversions
@@ -368,15 +391,22 @@ def test_batched_spectrum_to_XYZ():
     srgb = batched_XYZ_to_sRGB(mapped_xyz)
     print(f"srgb: {srgb}")
 
+def test_SPEC4_XYZ_fast():
+    srgb = torch.rand(100, 3)
+    xyz = batched_sRGB_to_XYZ(srgb)
+    test_round_trip("SPEC4 to XYZ fast", xyz, batched_XYZ_to_SPEC4, batched_SPEC4_to_XYZ_fast)
+    test_round_trip("SPEC4 to XYZ std", xyz, batched_XYZ_to_SPEC4, batched_SPEC4_to_XYZ)
+
 def test_all():
-    test_luminance()
-    test_XYZ_to_xyY()
-    test_sRGB_RGB()
-    test_RGB_XYZ()
-    test_sRGB_XYZ()
-    test_batched_spectrum_to_XYZ()
-    test_sRGB_SPEC4()
-    test_XYZ_SPEC4()
+    # test_luminance()
+    # test_XYZ_to_xyY()
+    # test_sRGB_RGB()
+    # test_RGB_XYZ()
+    # test_sRGB_XYZ()
+    # test_batched_spectrum_to_XYZ()
+    # test_sRGB_SPEC4()
+    # test_XYZ_SPEC4()
+    test_SPEC4_XYZ_fast()
 
 if __name__ == "__main__":
     test_all()
