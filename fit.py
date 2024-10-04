@@ -22,10 +22,27 @@ class StandardWavelengthsModel(WavelengthsModel):
     """A model that predicts the standard wavelengths of the SPEC4 channels."""
     def __init__(self):
         super().__init__()
-        self.wavelengths = nn.Parameter(conversions.SPEC4_wavelengths.clone())
+        self.wavelengths = nn.Parameter(conversions.SPEC4_standard_wavelengths.clone())
     def get_wavelengths(self) -> Tensor:
         return self.wavelengths
 
+class PositiveWavelengthsModel(WavelengthsModel):
+    """A model that predicts the standard wavelengths of the SPEC4 channels."""
+    def __init__(self):
+        super().__init__()
+        wavelengths = conversions.SPEC4_standard_wavelengths
+        log_dwavelengths = (wavelengths[1:] - wavelengths[:-1]).log()
+        self.log_dwavelengths = nn.Parameter(log_dwavelengths.detach().clone())
+        self.log_start_wavelength = nn.Parameter(wavelengths[0].log().detach().clone())
+    def get_wavelengths(self) -> Tensor:
+        dwavelengths = self.log_dwavelengths.exp()
+        start_wavelength = self.log_start_wavelength.exp()
+        wavelengths = torch.cat([
+            start_wavelength.unsqueeze(0),
+            start_wavelength + torch.cumsum(dwavelengths, dim=0),
+        ], dim=0)
+        return wavelengths
+    
 class Model(nn.Module):
     """Base class for all models."""
     def forward(self, x: Tensor) -> Tensor:
@@ -182,11 +199,13 @@ class XYZStoSPEC4Fitting(Fitting):
 
 class XYZWavelengthFitting:
     """Finds optimal wavelengths that produce positive spectra for XYZ fitting."""
-    def __init__(self, wavelengths_model_type: str = 'standard'):
+    def __init__(self, wavelengths_model_type: str = 'positive'):
         self.name = 'XYZ Wavelengths'
         self.model_type = wavelengths_model_type
         if wavelengths_model_type == 'standard':
             self.wavelengths_model = StandardWavelengthsModel()
+        elif wavelengths_model_type == 'positive':
+            self.wavelengths_model = PositiveWavelengthsModel()
         else:
             raise ValueError(f'Unknown wavelengths model type: {wavelengths_model_type}')
     def get_train_inputs(self, batch_size) -> tuple[Tensor, Optional[Tensor]]:
@@ -237,7 +256,6 @@ class XYZWavelengthFitting:
         optimizer = torch.optim.Adam(self.wavelengths_model.parameters(), lr=wavelengths_learning_rate)
         progress = tqdm(range(num_steps))
         progress.set_description(f'Fitting {self.name}')
-        filtered_loss = 0.0
         filtered_rloss = 0.0
         filtered_closs = 0.0
         for step in progress:
@@ -250,7 +268,7 @@ class XYZWavelengthFitting:
             clipped_spec4s = torch.nn.functional.relu(unclipped_spec4s)
             rec_xyzs = torch.matmul(clipped_spec4s, SPEC4_to_XYZ_matrix)
             rloss = self.get_reconstruction_loss(inputs, rec_xyzs, extra)
-            closs = 2000.0 * self.get_constraint_loss(unclipped_spec4s, extra)
+            closs = 100.0 * self.get_constraint_loss(unclipped_spec4s, extra)
             loss = rloss + closs
             optimizer.zero_grad()
             loss.backward()
@@ -260,21 +278,22 @@ class XYZWavelengthFitting:
             filtered_closs = closs_val if step == 0 else 0.99 * filtered_closs + 0.01 * closs_val
             filtered_rloss = rloss_val if step == 0 else 0.99 * filtered_rloss + 0.01 * rloss_val
             progress.set_postfix(rloss=filtered_rloss, closs=filtered_closs)
-        print(f'Final loss: {filtered_loss:.16f}')
+        print(f'Final rloss: {filtered_rloss:.16f}')
+        print(f'Final closs: {filtered_closs:.16f}')
 
 if __name__ == '__main__':
     wfitting = XYZWavelengthFitting()
     print(f"Fitting {wfitting.name}...")
-    wfitting.fit(num_steps=400_000)
+    wfitting.fit(num_steps=100_000)
     wfitting.wavelengths_model.eval()
     with torch.no_grad():
         torch.set_printoptions(precision=12)
         wavelengths = wfitting.wavelengths_model.get_wavelengths().detach().clone()
-        print(f"SPEC4_wavelengths = {repr(wavelengths)}")
         SPEC4_to_XYZ_matrix = wfitting.get_SPEC4_to_XYZ_matrix(wavelengths)
-        print(f"SPEC4_to_XYZ_matrix = {repr(SPEC4_to_XYZ_matrix)}")
         XYZ_to_SPEC4_matrix = wfitting.get_XYZ_to_SPEC4_matrix(SPEC4_to_XYZ_matrix)
-        print("XYZ_to_SPEC4_matrix =", repr(XYZ_to_SPEC4_matrix))
+        print(f"SPEC4_wavelengths = {repr(wavelengths)}")
+        print(f"XYZ_to_SPEC4_matrix = {repr(XYZ_to_SPEC4_matrix)}")
+        print(f"SPEC4_to_XYZ_matrix = {repr(SPEC4_to_XYZ_matrix)}")
     
     fittings = [
         # RGBtoSPEC4Fitting(),
