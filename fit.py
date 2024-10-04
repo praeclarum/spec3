@@ -189,8 +189,8 @@ if __name__ == '__main__':
     print(f"{fitting.name} wavelengths:")
     print(repr(fitting.wavelengths_model.get_wavelengths()))
 
-    inverse_fitting = InverseFitting(fitting)
-    print(f"Fitting {inverse_fitting.name}...")
-    inverse_fitting.fit(num_steps=100_000)
-    print(f"{inverse_fitting.name} weights:")
-    inverse_fitting.model.print_weights()
+    # inverse_fitting = InverseFitting(fitting)
+    # print(f"Fitting {inverse_fitting.name}...")
+    # inverse_fitting.fit(num_steps=100_000)
+    # print(f"{inverse_fitting.name} weights:")
+    # inverse_fitting.model.print_weights()

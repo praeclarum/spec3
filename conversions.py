@@ -110,12 +110,10 @@ RGB_to_SPEC4_matrix = torch.tensor([[ 1.7350e-03,  1.7194e-05,  9.2140e-03],
         [ 4.8327e-03,  2.1318e-03, -2.1668e-03],
         [ 4.0426e-03,  1.3245e-03, -1.3198e-03]]).T
 
-# ERROR: linalg.inv: A must be batches of square matrices, but they are 4 by 3 matrices
-# SPEC4_to_RGB_matrix = torch.inverse(RGB_to_SPEC4_matrix)
-
-SPEC4_to_XYZ_matrix = torch.tensor([[ 9.8939, 10.1874, 10.1392, 10.1701],
-        [ 9.6922,  9.8004,  9.5912,  9.6659],
-        [ 9.4744, 10.1183,  9.8699,  9.4975]]).T
+XYZ_to_SPEC4_matrix = torch.tensor([[ 0.0011, -0.0013,  0.0098],
+        [-0.0208,  0.0253,  0.0025],
+        [ 0.0153, -0.0012, -0.0024],
+        [ 0.0079, -0.0006, -0.0012]]).T
 
 def batched_RGB_to_SPEC4(rgb: Tensor, clip: bool = True) -> Tensor:
     """Converts linear RGB to SPEC4.
@@ -252,9 +250,6 @@ def batched_SPEC4_to_RGB(spec4: Tensor) -> Tensor:
     xyz = batched_SPEC4_to_XYZ(spec4)
     return batched_XYZ_to_RGB(xyz)
 
-def batched_SPEC4_to_XYZ_fast(spec4: Tensor) -> Tensor:
-    return torch.matmul(spec4, SPEC4_to_XYZ_matrix)
-
 def batched_SPEC4_to_sRGB(spec4):
     """Converts SPEC4 to sRGB in the range [0, 1].
 
@@ -266,17 +261,20 @@ def batched_SPEC4_to_sRGB(spec4):
     """
     return batched_RGB_to_sRGB(batched_SPEC4_to_RGB(spec4))
 
-def batched_XYZ_to_SPEC4(xyz):
+def batched_XYZ_to_SPEC4(xyz, clip: bool = True):
     """Converts CIE XYZ to SPEC4.
 
     Args:
         xyz: A tensor of CIE XYZ values shaped as (batch_size, 3).
+        clip: Whether to clip the output to non-negative values.
 
     Returns:
         A tensor of SPEC4 values shaped as (batch_size, 4).
     """
-    rgb = batched_XYZ_to_RGB(xyz)
-    return batched_RGB_to_SPEC4(rgb)
+    spec4 = torch.matmul(xyz, XYZ_to_SPEC4_matrix)
+    if clip:
+        spec4 = torch.nn.functional.relu(spec4)
+    return spec4
 
 #
 # Testing
@@ -346,10 +344,10 @@ def test_sRGB_SPEC4():
     input_data = torch.rand(100, 3)
     test_round_trip("sRGB to SPEC4", input_data, batched_sRGB_to_SPEC4, batched_SPEC4_to_sRGB)
 
-def test_SPEC4_RGB_fast():
+def test_XYZ_SPEC4():
     srgb = torch.rand(100, 3)
-    rgb = batched_sRGB_to_RGB(srgb)
-    test_round_trip("SPEC4 to RGB fast", rgb, batched_RGB_to_SPEC4, batched_SPEC4_to_RGB_fast)
+    input_data = batched_sRGB_to_XYZ(srgb)
+    test_round_trip("XYZ to SPEC4", input_data, batched_XYZ_to_SPEC4, batched_SPEC4_to_XYZ)
 
 def test_batched_spectrum_to_XYZ():
     wavelengths = torch.tensor([
@@ -373,12 +371,12 @@ def test_batched_spectrum_to_XYZ():
 def test_all():
     test_luminance()
     test_XYZ_to_xyY()
-    test_sRGB_SPEC4()
     test_sRGB_RGB()
     test_RGB_XYZ()
     test_sRGB_XYZ()
     test_batched_spectrum_to_XYZ()
-    test_SPEC4_RGB_fast()
+    test_sRGB_SPEC4()
+    test_XYZ_SPEC4()
 
 if __name__ == "__main__":
     test_all()
