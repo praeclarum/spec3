@@ -1,5 +1,6 @@
 """SPEC3 definitions and manipulation functions."""
 
+import math
 import torch
 from torch import Tensor, tensor
 
@@ -55,3 +56,61 @@ def get_radiance(sx, sy, sz, wavelength):
         return mix(sz, 0.0, u)
     return 0.0
 
+def get_radiance_with_wavelengths(s3: Tensor, wavelengths: Tensor, wavelength: float):
+    wa = wavelengths[0]
+    wx = wavelengths[1]
+    wy = wavelengths[2]
+    wz = wavelengths[3]
+    wo = wavelengths[4]
+    sx, sy, sz = s3
+    if wavelength <= wa:
+        return 0.0
+    if wavelength <= wx:
+        u = (wavelength - wa) / (wx - wa)
+        return mix(0.0, sx, u)
+    if wavelength <= wy:
+        u = (wavelength - wx) / (wy - wx)
+        return mix(sx, sy, u)
+    if wavelength <= wz:
+        u = (wavelength - wy) / (wz - wy)
+        return mix(sy, sz, u)
+    if wavelength <= wo:
+        u = (wavelength - wz) / (wo - wz)
+        return mix(sz, 0.0, u)
+    return 0.0
+
+def doppler_shift(s3: Tensor, beta: float):
+    """Doppler shift the SPEC3 values by beta.
+    Beta is the ratio relative velocity/speed of light.
+    When beta > 0, the source is moving away from the receiver.
+    When beta < 0, the source is moving towards the receiver.
+
+    Args:
+        s3: The SPEC3 value of the source.
+        beta: The ratio relative velocity/speed of light.
+
+    Returns:
+        The SPEC3 values of the source color 
+        after the Doppler shift has been applied.
+    """
+    # wavelength_r/wavelength_s = sqrt((1 + beta)/(1 - beta))
+    wavelength_scale = math.sqrt((1 + beta) / (1 - beta))
+    received_wavelengths = SPEC3_standard_wavelengths * wavelength_scale
+    new_sx = get_radiance_with_wavelengths(s3, received_wavelengths, SPEC3_standard_wavelengths[1])
+    new_sy = get_radiance_with_wavelengths(s3, received_wavelengths, SPEC3_standard_wavelengths[2])
+    new_sz = get_radiance_with_wavelengths(s3, received_wavelengths, SPEC3_standard_wavelengths[3])
+    return tensor([new_sx, new_sy, new_sz])
+
+def test_doppler_shift():
+    print("-"*40)
+    print("Doppler shift test")
+    print("-"*40)
+    s3 = tensor([0.0, 0.795, 0.136])
+    print(f"Incoming s3: {s3}")
+    betas = [-0.7, -0.5, -0.1, 0.0, 0.1, 0.36, 0.5]
+    for beta in betas:
+        recv_s3 = doppler_shift(s3, beta)
+        print(f"  beta: {beta:.2f}, Received: {recv_s3}")
+
+if __name__ == "__main__":
+    test_doppler_shift()
