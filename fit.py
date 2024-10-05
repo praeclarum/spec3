@@ -4,6 +4,7 @@ import torch
 from torch import Tensor, nn
 from tqdm.autonotebook import tqdm
 
+from spec3 import SPEC3_standard_wavelengths, get_optimal_SPEC3_to_XYZ_right_matrix
 import conversions
 
 class WavelengthsModel(nn.Module):
@@ -22,7 +23,7 @@ class StandardWavelengthsModel(WavelengthsModel):
     """A model that predicts the standard wavelengths of the SPEC3 channels."""
     def __init__(self):
         super().__init__()
-        self.wavelengths = nn.Parameter(conversions.SPEC3_standard_wavelengths.clone())
+        self.wavelengths = nn.Parameter(SPEC3_standard_wavelengths.clone())
     def get_wavelengths(self) -> Tensor:
         return self.wavelengths
 
@@ -30,7 +31,7 @@ class PositiveWavelengthsModel(WavelengthsModel):
     """A model that predicts the standard wavelengths of the SPEC3 channels."""
     def __init__(self):
         super().__init__()
-        wavelengths = conversions.SPEC3_standard_wavelengths
+        wavelengths = SPEC3_standard_wavelengths
         log_dwavelengths = (wavelengths[1:] - wavelengths[:-1]).log()
         self.log_dwavelengths = nn.Parameter(log_dwavelengths.detach().clone())
         self.log_start_wavelength = nn.Parameter(wavelengths[0].log().detach().clone())
@@ -237,7 +238,7 @@ class XYZWavelengthFitting:
             with torch.no_grad():
                 inputs, extra = self.get_train_inputs(batch_size)
             wavelengths = self.wavelengths_model.get_wavelengths()
-            SPEC3_to_XYZ_matrix = conversions.get_optimal_SPEC3_to_XYZ_right_matrix(wavelengths)
+            SPEC3_to_XYZ_matrix = get_optimal_SPEC3_to_XYZ_right_matrix(wavelengths)
             XYZ_to_SPEC3_matrix = self.get_XYZ_to_SPEC3_matrix(SPEC3_to_XYZ_matrix)
             unclipped_spec3s = torch.matmul(inputs, XYZ_to_SPEC3_matrix)
             clipped_spec3s = torch.nn.functional.relu(unclipped_spec3s)
@@ -264,11 +265,12 @@ if __name__ == '__main__':
     with torch.no_grad():
         torch.set_printoptions(precision=15, sci_mode=False)
         wavelengths = wfitting.wavelengths_model.get_wavelengths().detach().clone()
-        SPEC3_to_XYZ_matrix = wfitting.get_SPEC3_to_XYZ_matrix(wavelengths)
+        SPEC3_to_XYZ_matrix = get_optimal_SPEC3_to_XYZ_right_matrix(wavelengths)
         XYZ_to_SPEC3_matrix = wfitting.get_XYZ_to_SPEC3_matrix(SPEC3_to_XYZ_matrix)
         print()
         print(f"SPEC3_wavelengths = {repr(wavelengths)}")
-        # print(f"XYZ_to_SPEC3_right_matrix = {repr(XYZ_to_SPEC3_matrix)}")
+        print()
+        print(f"XYZ_to_SPEC3_right_matrix = {repr(XYZ_to_SPEC3_matrix)}")
         print()
         print(f"SPEC3_to_XYZ_right_matrix = {repr(SPEC3_to_XYZ_matrix)}")
     
