@@ -1,6 +1,6 @@
 # SPEC3 Color Space
 
-SPEC3 is a new color space that represents colors using a light spectrum compactly represented as 3 values (SX, SY, and SZ) that specify 3 spectral radiances at the wavelengths 440, 545, and 630nm.
+SPEC3 is a new color space that represents colors using a light spectrum compactly represented as 3 values (SX, SY, and SZ) that specify 3 spectral radiances at the wavelengths 438, 542, and 644nm.
 
 It converts perceptual colors to the physically real spectra
 that caused their perception. These physically real spectra
