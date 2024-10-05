@@ -39,23 +39,6 @@ XYZ_to_SPEC3_right_matrix = torch.inverse(SPEC3_to_XYZ_right_matrix)
 def mix(a, b, u):
     return a * (1.0 - u) + b * u
 
-def get_radiance(sx, sy, sz, wavelength):
-    if wavelength <= 348.0:
-        return 0.0
-    if wavelength <= 438.0:
-        u = (wavelength - 348.0) / (438.0 - 348.0)
-        return mix(0.0, sx, u)
-    if wavelength <= 542.0:
-        u = (wavelength - 438.0) / (542.0 - 438.0)
-        return mix(sx, sy, u)
-    if wavelength <= 644.0:
-        u = (wavelength - 542.0) / (644.0 - 542.0)
-        return mix(sy, sz, u)
-    if wavelength <= 760.0:
-        u = (wavelength - 644.0) / (760.0 - 644.0)
-        return mix(sz, 0.0, u)
-    return 0.0
-
 def get_radiance_with_wavelengths(s3: Tensor, wavelengths: Tensor, wavelength: float):
     wa = wavelengths[0]
     wx = wavelengths[1]
@@ -79,6 +62,25 @@ def get_radiance_with_wavelengths(s3: Tensor, wavelengths: Tensor, wavelength: f
         return mix(sz, 0.0, u)
     return 0.0
 
+def get_radiance(s3: Tensor, wavelength: float):
+    return get_radiance_with_wavelengths(s3, SPEC3_standard_wavelengths, wavelength)
+
+def resample_with_wavelengths(s3: Tensor, wavelengths: Tensor):
+    """Determine the SPEC3 values of the source color
+    after it has been distorted to the given wavelengths.
+
+    Args:
+        s3: The SPEC3 value of the source.
+        wavelengths: The distorted wavelengths of the color.
+
+    Returns:
+        The color resampled to the standard SPEC3 wavelengths.
+    """
+    new_sx = get_radiance_with_wavelengths(s3, wavelengths, SPEC3_standard_wavelengths[1])
+    new_sy = get_radiance_with_wavelengths(s3, wavelengths, SPEC3_standard_wavelengths[2])
+    new_sz = get_radiance_with_wavelengths(s3, wavelengths, SPEC3_standard_wavelengths[3])
+    return tensor([new_sx, new_sy, new_sz])
+
 def doppler_shift(s3: Tensor, beta: float):
     """Doppler shift the SPEC3 values by beta.
     Beta is the ratio relative velocity/speed of light.
@@ -96,10 +98,7 @@ def doppler_shift(s3: Tensor, beta: float):
     # wavelength_r/wavelength_s = sqrt((1 + beta)/(1 - beta))
     wavelength_scale = math.sqrt((1 + beta) / (1 - beta))
     received_wavelengths = SPEC3_standard_wavelengths * wavelength_scale
-    new_sx = get_radiance_with_wavelengths(s3, received_wavelengths, SPEC3_standard_wavelengths[1])
-    new_sy = get_radiance_with_wavelengths(s3, received_wavelengths, SPEC3_standard_wavelengths[2])
-    new_sz = get_radiance_with_wavelengths(s3, received_wavelengths, SPEC3_standard_wavelengths[3])
-    return tensor([new_sx, new_sy, new_sz])
+    return resample_with_wavelengths(s3, received_wavelengths)
 
 def test_doppler_shift():
     print("-"*40)
